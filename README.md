@@ -1,155 +1,162 @@
-<div align="center">
+<p align="center">
+  <img src="build/icon.png" width="120" height="120" alt="InfinityClaude logo" />
+</p>
 
-# InfinityClaude
+<h1 align="center">InfinityClaude</h1>
 
-Десктопный ИИ-агент для работы с проектами: читает и редактирует файлы, запускает команды, ищет в интернете, подключает внешние инструменты через MCP и скилы — всё в одном окне.
+<p align="center">
+  <strong>A desktop AI agent for working on projects</strong><br/>
+  Reads and edits files, runs commands, searches the web, and plugs into external tools via MCP — all in one window.
+</p>
 
-![License](https://img.shields.io/badge/license-MIT-blue)
-![Electron](https://img.shields.io/badge/Electron-33-47848F)
-![Platform](https://img.shields.io/badge/Windows-10%20%2B-0078D6)
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license" />
+  <img src="https://img.shields.io/badge/Electron-33-47848F" alt="Electron 33" />
+  <img src="https://img.shields.io/badge/Platform-Windows_10%2B-0078D6" alt="Windows" />
+  <img src="https://img.shields.io/badge/Node.js-18%2B-339933" alt="Node.js 18+" />
+</p>
 
-</div>
+---
 
-## Возможности
+## Features
 
-- **Агентный режим** — модель получает инструменты: файлы, терминал, веб-поиск, опросы и может выполнять задачи в твоём проекте (с запросом разрешения).
-- **Проекты (workspaces)** — отдельные воркспейсы-папки, в каждом своя история чатов.
-- **MCP-серверы** — подключай внешние инструменты (`npx ...` или HTTP URL): файловые системы, базы данных, браузер и свои сервисы.
-- **Скилы** — персональные инструкции (SKILL.md), которые модель применяет по ситуации.
-- **Умный роутинг** — выбор модели: `auto` сам подбирает провайдера или выбери конкретную модель вручную.
-- **Веб-доступ** — поиск DuckDuckGo и чтение страниц прямо из чата.
-- **Гибкие настройки** — темы, акцентные цвета, анимации, поведение Enter, бюджеты контекста и многое другое.
-- **Русский интерфейс** — по умолчанию, с выбором языка ответов.
+- **Agent mode** — the model gets real tools: file operations, terminal, web search, and interactive polls to complete tasks inside your project (with permission prompts).
+- **Workspaces** — each project folder keeps its own chat history.
+- **MCP servers** — attach external tools via `npx ...` commands or HTTP URLs: filesystems, databases, a browser, or your own services.
+- **Skills** — personal instructions (`SKILL.md`) the model applies when the situation matches.
+- **Smart routing** — pick `auto` and let the gateway choose a working provider, or select a specific model manually.
+- **Web access** — DuckDuckGo search and page reading right from the chat.
+- **Flexible settings** — themes, accent colors, animations, Enter behavior, context budgets and more.
+- **English & Russian UI** — defaults to Russian, with a selectable response language.
 
-## Требования
+## Requirements
 
 - Windows 10/11, 64-bit
-- [Node.js](https://nodejs.org) 18+ (только для запуска из исходников)
-- Работающий **OmniRoute** гейтвей с доступным API-ключом (по умолчанию `http://localhost:20128`)
+- [Node.js](https://nodejs.org) 18+ (only needed to run from source)
+- A running **OmniRoute** gateway with an available API key (default: `http://localhost:20128`)
 
-## Установка
+## Installation
 
-### Готовый установщик
+### Installer build
 
-Скачай `InfinityClaude Setup 1.0.0.exe` из [Releases](../../releases) и запусти.
+Download `InfinityClaude Setup 1.0.0.exe` from the [Releases](../../releases) page and run it.
 
-### Из исходников
+### From source
 
 ```bash
 npm install
 npm start
 ```
 
-Сборка установщика:
+Build the installer:
 
 ```bash
-npm run dist       # создаёт release/InfinityClaude Setup *.exe
+npm run dist       # creates release/InfinityClaude Setup *.exe
 ```
 
-## Быстрый старт
+## Quick start
 
-1. Запусти приложение.
-2. Открой **Настройки → Подключение**, проверь Base URL шлюза и укажи API-ключ OmniRoute. Нажми «Проверить подключение».
-3. Нажми **«Добавить папку проекта»** в рабочей области и выбери свою папку.
-4. Напиши задачу — например: *«Посмотри структуру проекта и расскажи, что в нём есть»*.
+1. Launch the app.
+2. Open **Settings → Connection**, verify the gateway Base URL and enter your OmniRoute API key. Click **"Test connection"**.
+3. Click **"Add project folder"** in the sidebar and choose your folder.
+4. Ask something like: *"Look at the project structure and tell me what's in it."*
 
-> При первом действии, изменяющем файлы, или запуске команды приложение спросит разрешение. Включить авто-одобрение можно в настройках.
+> The first time you modify a file or run a command, the app will ask for permission. You can enable auto-approval in the settings.
 
-## OmniRoute: установка и настройка шлюза
+## OmniRoute: installing and setting up the gateway
 
-InfinityClaude сам не ходит в платные API напрямую — он общается с **OmniRoute** (гейтвей, который собирает множество провайдеров и бесплатных/дешёвых моделей в один OpenAI-совместимый API). Без работающего OmniRoute чат не будет отвечать.
+InfinityClaude does not talk to paid APIs directly — it goes through **OmniRoute**, a gateway that aggregates many providers into a single OpenAI-compatible API. Without a running OmniRoute, the chat won't respond.
 
-### Установка OmniRoute
+### Install OmniRoute
 
 ```bash
 npm install -g omniroute
 ```
 
-Запусти гейтвей:
+Start the gateway:
 
 ```bash
 omniroute start
 ```
 
-По умолчанию он слушает на `http://localhost:20128` — это значение уже стоит в InfinityClaude.
+It listens on `http://localhost:20128` by default — that's exactly what InfinityClaude uses out of the box.
 
-### Подключение модели (OAuth-аккаунт)
+### Connect a model (OAuth account)
 
-1. Открой веб-интерфейс OmniRoute (обычно `http://localhost:20128` или `http://localhost:3xxxx`).
-2. Добавь аккаунт провайдера (например, **Kiro** или другой поддерживаемый) и авторизуй через OAuth.
-3. Проверь в списке моделей, что появились рабочие модели (например `kr/claude-sonnet-4.5`).
+1. Open the OmniRoute web UI (usually `http://localhost:20128`).
+2. Add a provider account (e.g. **Kiro**) and authorize via OAuth.
+3. Confirm working models appear in the list (e.g. `kr/claude-sonnet-4.5`).
 
-Когда аккаунт авторизован, в InfinityClaude в **Настройки → Подключение** можно оставить модель `auto` — она сама выберет рабочего провайдера.
+Once an account is authorized, keep `auto` in InfinityClaude's **Settings → Connection** — routing picks a working provider on its own.
 
-> Устаревшие токены дают ошибку «Token expired» — токены надо обновлять в веб-интерфейсе OmniRoute. После обновления нажми «Обновить модели» в InfinityClaude.
+> Stale tokens cause a "Token expired" error — refresh them in the OmniRoute web UI, then hit **"Refresh models"** in InfinityClaude.
 
-### Быстрая проверка шлюза
+### Verify the gateway
 
-Прямо в InfinityClaude: **Настройки → Подключение → «Проверить подключение»**. Успех = список моделей ответил за несколько десятков мс.
+In InfinityClaude: **Settings → Connection → "Test connection"**. Success = the model list responds in a few dozen milliseconds.
 
-## Работа с ИИ: базовые приёмы
+## Working with the AI: best practices
 
-Проект — это **агент** с инструментами. Он умеет сам смотреть и менять файлы, запускать команды, искать в интернете, спрашивать тебя через опросы и использовать подключённые MCP-серверы.
+This is an **agent** with tools. It can inspect and change files, run commands, search the web, ask you via polls, and use connected MCP servers on its own.
 
-**Как просить лучше:**
+**How to ask better:**
 
-- Говори конкретнее: *«Посмотри файлы в src/ и найди, где обрабатываются ошибки сети»* — лучше, чем *«почини баги»*.
-- Одной задачей за раз. Если задач несколько — перечисли их списком, агент разобьёт сам.
-- Если нужен конкретный результат (формат, стиль, ограничения) — укажи сразу.
-- После крупных правок попроси кратко резюмировать, что изменилось.
+- Be specific: *"Look at the files in src/ and find where network errors are handled"* beats *"fix bugs"*.
+- One task at a time. If you have several, list them — the agent will break them down.
+- State a concrete result (format, style, constraints) up front.
+- After major changes, ask for a short summary of what was modified.
 
-**Что агент делает сам:**
+**What the agent does on its own:**
 
-- Читает и осматривает проект перед действиями.
-- Выполняет правки через инструменты, а не «на глаз» — результат всегда реальный.
-- При неоднозначности задаёт уточняющий опрос вместо догадок.
-- Честно сообщает об ошибках и предлагает решение.
-- Спрашивает разрешение перед изменением файлов и выполнением команд (пока не включено авто-одобрение).
+- Reads and inspects the project before acting.
+- Applies changes through real tools, not guesses — results are always actual.
+- Sends a clarifying poll when the task is ambiguous instead of guessing.
+- Honestly reports errors and proposes a fix.
+- Asks permission before modifying files or running commands (until auto-approval is on).
 
-**Режимы разрешений** (Настройки → Агент и разрешения):
+**Approval modes** (Settings → Agent & approvals):
 
-| Режим | Поведение |
+| Mode | Behavior |
 | --- | --- |
-| `Спрашивать` | Подтверждение перед каждым действием (безопасно, по умолчанию) |
-| `Разрешать чтение` | Чтение и списки файлов без вопросов, изменения — с подтверждением |
-| `Разрешать всё` | Все действия без вопросов (только для доверенных проектов) |
+| `Ask` | Confirm before every action (safe, default) |
+| `Allow reads` | Reads and listings run without prompts; changes still confirm |
+| `Allow everything` | All actions run without prompts (only for trusted projects) |
 
-**Если что-то не так:**
+**Troubleshooting:**
 
-- Модель зациклилась или отвечает не то → останови кнопкой, уточни задачу или смени модель.
-- Шлюз молчит → проверь, что OmniRoute запущен и аккаунт не «Token expired».
-- Модель не видит инструменты → убедись, что агентный режим включён.
+- Model loops or replies off-topic → stop it, clarify the task, or switch models.
+- Gateway silent → check that OmniRoute is running and the account isn't "Token expired".
+- Model doesn't see tools → make sure Agent mode is enabled.
 
-## MCP-серверы
+## MCP servers
 
-В **Настройки → MCP-серверы** добавь сервер:
+In **Settings → MCP servers** add a server:
 
-- **Командой** — например: `npx -y @modelcontextprotocol/server-filesystem C:\Projects`
-- **По URL** — например: `http://localhost:3001/mcp`
+- **As a command** — e.g. `npx -y @modelcontextprotocol/server-filesystem C:\Projects`
+- **By URL** — e.g. `http://localhost:3001/mcp`
 
-Каждый включённый сервер подключается автоматически, а его инструменты передаются модели с префиксом `mcp__сервер__инструмент`.
+Each enabled server connects automatically and its tools are exposed to the model with the `mcp__server__tool` prefix.
 
-## Скилы
+## Skills
 
-Скилы — это папки со `SKILL.md` (метаданные в frontmatter: `name`, `description`). Создай скил в **Настройки → Скилы**, включи его, и модель будет применять его, когда подходит описание.
+Skills are folders with a `SKILL.md` (frontmatter metadata: `name`, `description`). Create one in **Settings → Skills**, enable it, and the model will apply it whenever its description matches. Custom skills live in the app's data folder (`%APPDATA%\InfinityClaude\skills\`).
 
-## Конфигурация
+## Configuration
 
-Настройки хранятся в файле конфига в папке данных приложения (`%APPDATA%\InfinityClaude\config.json`). Всё управляется из UI, но файл можно править и руками.
+Settings are stored in the app data folder (`%APPDATA%\InfinityClaude\config.json`). Everything is manageable from the UI, but the file can be edited by hand too.
 
-## Для разработчиков
+## For developers
 
 ```
-main.js        # главный процесс: окно, инструменты, агентный цикл
-preload.js     # мост IPC для рендерера
-renderer/      # интерфейс (HTML/CSS/JS)
-src/           # модули: settings, gateway, workspace, fsx, shell, mcp, skills
-skills/        # встроенные скилы (SKILL.md)
-build/         # иконки, генерация .ico
+main.js        # main process: window, tools, agent loop
+preload.js     # IPC bridge for the renderer
+renderer/      # UI (HTML/CSS/JS)
+src/           # modules: settings, gateway, workspace, fsx, shell, mcp, skills
+build/         # icons and .ico generation
 ```
 
-Архитектура: рендерер общается с главным процессом через IPC; агентный цикл крутит раунды «модель → инструменты → результат» до завершения задачи.
+Architecture: the renderer talks to the main process over IPC; the agent loop cycles through *model → tools → result* rounds until the task is done.
 
-## Лицензия
+## License
 
 MIT
