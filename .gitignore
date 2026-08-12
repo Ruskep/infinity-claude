@@ -1,0 +1,20 @@
+# Зависимости и сборка
+node_modules/
+release/
+dist/
+out/
+
+# Личные данные и токены
+launch-claude.bat
+*.local
+.env
+.env.*
+
+# Временные и служебные
+build/_auto-icon/
+*.log
+npm-debug.log*
+
+# Системное
+Thumbs.db
+.DS_Store

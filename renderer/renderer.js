@@ -1,0 +1,1734 @@
+const api = window.infinity;
+
+const state = {
+  settings: null,
+  models: [],
+  workspaces: [],
+  activeWorkspace: null,
+  activeChatId: null,
+  collapsedWs: null,
+  skills: [],
+  skillEnabled: {},
+  mcpServers: [],
+  streaming: false,
+  messages: [],
+  toolCards: [],
+  pendingFiles: [],
+  lastAssistant: null
+};
+
+let unsubscribe = null;
+
+/* ---------- refs ---------- */
+const $ = (id) => document.getElementById(id);
+const elMessages = $('messages');
+const elInput = $('input');
+const elSend = $('send-btn');
+const elStop = $('stop-btn');
+const elModel = $('model-select');
+const elStatusDot = $('status-dot');
+const elStatusText = $('status-text');
+const elWsScroll = $('ws-scroll');
+const elCrumb = $('crumb-folder');
+const elSkillsList = $('skills-list');
+const elEmpty = $('empty-state');
+const elAttach = $('attach-btn');
+const elFileInput = $('file-input');
+const elAttachments = $('attachments');
+
+/* ---------- helpers ---------- */
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function prettyModel(id) {
+  if (!id) return '';
+  if (id === 'auto') return 'auto (роутинг)';
+  let s = id;
+  if (s.includes('/')) s = s.split('/').slice(1).join('/');
+  s = s.replace(/claude[-_]?(sonnet|opus|haiku)?/i, (m) => m.replace(/^claude/i, 'Claude'));
+  s = s.replace(/-/g, ' ');
+  s = s.replace(/\b(opus)\b/gi, 'Opus').replace(/\b(sonnet)\b/gi, 'Sonnet').replace(/\b(haiku)\b/gi, 'Haiku');
+  return s.trim() || id;
+}
+
+function renderMarkdown(text) {
+  const preBlocks = [];
+  let t = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, _lang, code) => {
+    const id = '\u0000PRE' + preBlocks.length + '\u0000';
+    preBlocks.push(`<pre><code>${escapeHtml(code)}</code></pre>`);
+    return '\n' + id + '\n';
+  });
+
+  t = t.replace(/`([^`\n]+)`/g, (_m, c) => `<code>${escapeHtml(c)}</code>`);
+  t = t.replace(/^#{1,6}\s+(.+)$/gm, (_m, h) => {
+    const lvl = Math.min(3, _m.match(/^#+/)[0].length);
+    return `<h${lvl}>${escapeHtml(h)}</h${lvl}>`;
+  });
+  t = t.replace(/\*\*([^*]+)\*\*/g, (_m, b) => `<b>${escapeHtml(b)}</b>`);
+  t = t.replace(/^>\s?(.+)$/gm, (_m, q) => `<blockquote>${escapeHtml(q)}</blockquote>`);
+  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, txt, url) => `<a href="${escapeHtml(url)}">${escapeHtml(txt)}</a>`);
+  t = t.replace(/^\s*[-*]\s+(.+)$/gm, (_m, li) => `• ${li}`);
+  t = t.replace(/^\s*(\d+)[.)]\s+(.+)$/gm, (_m, n, li) => `${n}. ${li}`);
+
+  const lines = t.split('\n').map((line) => line.trim());
+  let out = '';
+  let listStack = [];
+  const closeLists = () => { while (listStack.length) { out += '</ul>'; listStack.pop(); } };
+
+  for (const s of lines) {
+    if (!s) { closeLists(); if (out.trim()) out += '<p></p>'; }
+    else if (s.startsWith('• ')) {
+      if (!listStack.length) { out += '<ul>'; listStack.push(1); }
+      out += `<li>${s.slice(2)}</li>`;
+    } else if (/^\d+\. /.test(s)) {
+      const n = s.match(/^(\d+)\. /)[1];
+      if (listStack.length) { }
+      else { out += '<ol>'; listStack.push(2); }
+      out += `<li><span class="ol-n">${n}.</span> ${s.slice(s.indexOf('.') + 2)}</li>`;
+    } else {
+      closeLists();
+      const isBlock = s.startsWith('<pre>') || s === '</pre>' || s.startsWith('<blockquote>') || s === '</blockquote>' ||
+        /^<\/?h[1-3]>/.test(s) || s.startsWith('\u0000PRE');
+      out += isBlock ? s : `<p>${s}</p>`;
+    }
+  }
+  closeLists();
+
+  for (let i = 0; i < preBlocks.length; i++) out = out.split('\u0000PRE' + i + '\u0000').join(preBlocks[i]);
+  return out;
+}
+
+function setStatus(cls, text) {
+  elStatusDot.className = 'dot ' + cls;
+  elStatusText.textContent = text;
+}
+
+function autosize() {
+  elInput.style.height = 'auto';
+  elInput.style.height = Math.min(elInput.scrollHeight, 220) + 'px';
+}
+
+function scrollToBottom() {
+  if (state.settings && state.settings.autoScroll === false) return;
+  // автоскроллим только если пользователь и так внизу — избегаем reflow на каждый чанк
+  const nearBottom = elMessages.scrollHeight - elMessages.scrollTop - elMessages.clientHeight < 120;
+  if (nearBottom) elMessages.scrollTop = elMessages.scrollHeight;
+}
+
+function addMsgEl() {
+  elEmpty.classList.add('hidden');
+  const wrapper = document.createElement('div');
+  wrapper.className = 'msg';
+  const label = document.createElement('div');
+  label.className = 'msg-label';
+  const content = document.createElement('div');
+  content.className = 'msg-content';
+  wrapper.appendChild(label);
+  wrapper.appendChild(content);
+  elMessages.appendChild(wrapper);
+  scrollToBottom();
+  return { wrapper, label, content };
+}
+
+function addUserMsg(text, attachments) {
+  const m = addMsgEl();
+  m.label.textContent = 'Вы';
+  m.wrapper.classList.add('user');
+  if (attachments && attachments.length) {
+    const row = document.createElement('div');
+    row.className = 'msg-attachments';
+    for (const a of attachments) {
+      const chip = document.createElement('div');
+      chip.className = 'msg-att';
+      if (a.kind === 'image' && a.dataUrl) {
+        chip.innerHTML = '<img class="att-thumb" src="' + a.dataUrl + '" alt="">';
+      } else {
+        const icon = a.kind === 'image' ? '🖼️' : (a.kind === 'text' ? '📄' : '📎');
+        chip.innerHTML = '<span class="att-ico">' + icon + '</span>';
+      }
+      const name = document.createElement('span');
+      name.className = 'att-name';
+      name.textContent = a.name;
+      chip.appendChild(name);
+      row.appendChild(chip);
+    }
+    m.content.appendChild(row);
+  }
+  const t = document.createElement('div');
+  t.className = 'msg-text';
+  t.textContent = text;
+  m.content.appendChild(t);
+  return m;
+}
+
+function addAssistantMsgStreamingLabel(round) {
+  const m = addMsgEl();
+  m.label.textContent = 'Claude';
+  m.label.dataset.round = round;
+  const md = document.createElement('div');
+  md.className = 'markdown';
+  m.content.appendChild(md);
+  m.md = md;
+  state.lastAssistant = m.wrapper;
+  return m;
+}
+
+// троттлинг рендера markdown: пересоздаём innerHTML не чаще 1 раза в 60мс,
+// чтобы не блокировать UI (в т.ч. сайдбар) на каждый символ стрима
+const mdLastFlush = new Map();
+function renderAssistant(m, text, opts) {
+  if (!m.md) return;
+  const live = !opts || opts.live !== false; // live = ещё идёт стрим
+  const now = performance.now();
+  const last = mdLastFlush.get(m) || 0;
+  if (live && now - last <= 60) return; // пропускаем «вспышку» — появится следующая серия чанков
+  mdLastFlush.set(m, now);
+  m.wrapper.classList.toggle('streaming', live);
+  if (!text || !text.trim()) {
+    if (live) {
+      m.md.innerHTML = '<span class="thinking"><span class="typing"><span></span><span></span><span></span></span><span class="thinking-txt">думает…</span></span>';
+    } else {
+      m.md.innerHTML = '<span class="empty-done">· действия выполнены</span>';
+    }
+  } else if (live) {
+    // появление текста: прозрачность -> видимо. Пока стрим идёт — мерцающий курсор.
+    m.md.innerHTML = renderMarkdown(text) + '<span class="caret"></span>';
+  } else {
+    m.md.innerHTML = renderMarkdown(text);
+  }
+  scrollToBottom();
+}
+// принудительно дорисовать финальный текст после конца стрима
+function flushMd(m) {
+  mdLastFlush.delete(m);
+}
+
+function addToolCard(wrapper, stateIm) {
+  const el = document.createElement('div');
+  el.className = 'tool-card';
+  const t = stateIm.tool;
+  const icon = t === 'bash'
+    ? '<path d="M4 17l6-6-6-6M12 19h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+    : t === 'web_search'
+    ? '<circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35M8.5 11h5M11 8.5v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+    : t === 'web_fetch'
+    ? '<path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 11h8M8 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+    : '<path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
+  const cmdText = (stateIm.params && (stateIm.params.command || stateIm.params.path || stateIm.params.url || stateIm.params.query || stateIm.params._raw)) || '';
+  el.innerHTML = `
+    <div class="tool-head">
+      <span class="tool-ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none">${icon}</svg></span>
+      <span class="tool-name">${escapeHtml(humanTool(stateIm.tool))}</span>
+      <span class="tool-state ${stateIm.state}">${stateSpinner(stateIm.state)}</span>
+    </div>
+    <div class="tool-cmd">${escapeHtml(cmdText)}</div>`;
+  if (wrapper) wrapper.appendChild(el);
+  else elMessages.appendChild(el);
+  scrollToBottom();
+  return el;
+}
+
+function humanTool(t) {
+  return {
+    bash: 'Терминал',
+    read_file: 'Чтение файла',
+    write_file: 'Запись файла',
+    edit_file: 'Правка файла',
+    delete_file: 'Удаление',
+    list_dir: 'Список файлов',
+    web_search: 'Поиск в интернете',
+    web_fetch: 'Чтение страницы'
+  }[t] || t;
+}
+
+function stateSpinner(s) {
+  if (s === 'running') return 'выполняется…';
+  if (s === 'done') return '✓';
+  if (s === 'denied') return '⛔ отклонено';
+  return '';
+}
+
+function setToolState(card, stateIm) {
+  if (!card) return;
+  const elState = card.querySelector('.tool-state');
+  if (elState) {
+    elState.className = 'tool-state ' + stateIm.state;
+    elState.textContent = stateSpinner(stateIm.state);
+  }
+  if (stateIm.state === 'done' && stateIm.resultText) {
+    let old = card.querySelector('.tool-result');
+    if (old) old.remove();
+    const div = document.createElement('div');
+    div.className = 'tool-result';
+    div.textContent = stateIm.resultText.slice(0, 4000);
+    card.appendChild(div);
+  }
+  scrollToBottom();
+}
+
+/* ---------- workspaces ---------- */
+
+async function loadWorkspaces() {
+  const prevActiveId = state.activeWorkspace ? state.activeWorkspace.id : null;
+  state.workspaces = await api.workspaceList();
+  // синхронизируем активный воркспейс со свежим объектом из списка,
+  // иначе saveChat() будет класть чаты в устаревший объект
+  if (prevActiveId) {
+    const cur = state.workspaces.find((w) => w.id === prevActiveId);
+    if (cur) state.activeWorkspace = cur;
+    else state.activeWorkspace = state.workspaces.find((w) => isNoneWs(w)) || state.workspaces[0] || null;
+  } else if (state.workspaces.length) {
+    state.activeWorkspace = state.workspaces[0];
+  }
+  renderWorkspaces();
+  if (!state._uiRestored) {
+    state._uiRestored = true;
+    await restoreLastChat();
+  }
+}
+
+function isNoneWs(ws) { return ws && ws.id === 'none'; }
+
+function toggleWsCollapse(wsId) {
+  if (!state.collapsedWs) state.collapsedWs = new Set();
+  if (state.collapsedWs.has(wsId)) state.collapsedWs.delete(wsId);
+  else state.collapsedWs.add(wsId);
+  renderWorkspaces();
+}
+
+function persistUIState() {
+  api.setSettings({
+    lastWorkspaceId: state.activeWorkspace ? state.activeWorkspace.id : null,
+    lastChatId: state.activeChatId || null
+  }).catch(() => {});
+}
+
+// при старте открываем последний выбранный проект/чат
+async function restoreLastChat() {
+  if (state.settings && state.settings.restoreOnStart === false) {
+    const noneWs = state.workspaces.find((w) => isNoneWs(w));
+    if (noneWs) { await activateWorkspace(noneWs.id); return; }
+  }
+  const lastWsId = state.settings && state.settings.lastWorkspaceId;
+  const lastChatId = state.settings && state.settings.lastChatId;
+  if (lastWsId) {
+    const ws = state.workspaces.find((w) => w.id === lastWsId);
+    if (ws) {
+      state.activeWorkspace = ws;
+      if (lastChatId && ws.chats.some((c) => c.id === lastChatId)) {
+        openChat(ws.id, lastChatId);
+        return;
+      }
+      await activateWorkspace(ws.id);
+      return;
+    }
+  }
+  const noneWs = state.workspaces.find((w) => isNoneWs(w));
+  if (noneWs) { await activateWorkspace(noneWs.id); return; }
+  if (state.activeWorkspace) await activateWorkspace(state.activeWorkspace.id);
+  else renderWorkspaces();
+}
+
+function chatPreview(chat) {
+  const msgs = chat.messages || [];
+  const last = msgs[msgs.length - 1];
+  if (!last) return '';
+  let s = String(last.content || '');
+  if (s.length > 46) s = s.slice(0, 46) + '…';
+  return s;
+}
+
+function chatTime(chat) {
+  const t = chat.updatedAt || chat.createdAt || 0;
+  if (!t) return '';
+  const diff = Date.now() - t;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'только что';
+  if (m < 60) return m + ' мин';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + ' ч';
+  const d = Math.floor(h / 24);
+  if (d < 7) return d + ' д';
+  return new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+
+function renderWorkspaces() {
+  elWsScroll.innerHTML = '';
+  const realWs = state.workspaces.filter((w) => !isNoneWs(w));
+  if (realWs.length === 0) {
+    // Нет ни одного реального проекта — показываем компактную подсказку
+    // + раздел «Без проекта» (в нём могут уже быть чаты).
+    const hint = document.createElement('div');
+    hint.className = 'ws-empty ws-empty-hint';
+    const btn = document.createElement('button');
+    btn.textContent = 'Добавить папку проекта';
+    btn.onclick = () => pickWorkspace();
+    hint.appendChild(document.createTextNode('Проектов пока нет. '));
+    hint.appendChild(btn);
+    elWsScroll.appendChild(hint);
+  }
+
+  const activeId = state.activeWorkspace && state.activeWorkspace.id;
+  for (const ws of state.workspaces) {
+    const isNone = isNoneWs(ws);
+    // «Без проекта» раскрыта по умолчанию (сворачивается только явно);
+    // реальные проекты свёрнуты, если не активны.
+    const collapsed = state.collapsedWs && state.collapsedWs.has(ws.id)
+      ? true
+      : (!isNone && ws.id !== activeId);
+    const group = document.createElement('div');
+    group.className = 'ws-group';
+    group.dataset.wsId = ws.id;
+
+    const head = document.createElement('div');
+    head.className = 'ws-head';
+    head.innerHTML = `
+      <span class="chev ${collapsed ? '' : 'open'}">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="folder-ic">${isNone
+        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 19h16M4 19V5a1 1 0 0 1 1-1h"   stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>'}</span>
+      <span class="ws-name" title="${escapeHtml(ws.path || '')}">${escapeHtml(ws.name)}</span>
+      <span class="ws-count">${(ws.chats || []).length || ''}</span>
+      ${isNone ? '' : '<button class="ws-del" title="Удалить проект">✕</button>'}`;
+    head.onclick = (e) => {
+      if (e.target.closest('.ws-del')) return;
+      if (e.target.closest('.chev')) {
+        toggleWsCollapse(ws.id);
+        return;
+      }
+      activateWorkspace(ws.id);
+    };
+    if (!isNone) {
+      head.querySelector('.ws-del').onclick = async (e) => {
+        e.stopPropagation();
+        if (state.settings && state.settings.confirmDelete !== false) {
+          if (!confirm('Удалить проект «' + ws.name + '» из списка? Файлы на диске не тронутся.')) return;
+        }
+        await api.workspaceRemove(ws.id);
+        await loadWorkspaces();
+        if (state.activeWorkspace && state.activeWorkspace.id === ws.id) {
+          state.activeWorkspace = state.workspaces.find((w) => isNoneWs(w)) || state.workspaces[0] || null;
+          if (state.activeWorkspace) activateWorkspace(state.activeWorkspace.id);
+          else newChat();
+        }
+      };
+    }
+    group.appendChild(head);
+
+    const chats = document.createElement('div');
+    chats.className = 'ws-chats' + (collapsed ? ' collapsed' : '');
+    const chatsInner = document.createElement('div');
+    chatsInner.className = 'ws-chats-inner';
+    chats.appendChild(chatsInner);
+    if (ws.chats && ws.chats.length) {
+      for (const chat of ws.chats) {
+        chatsInner.appendChild(buildChatItem(ws, chat));
+      }
+    } else if (!collapsed) {
+      const e2 = document.createElement('div');
+      e2.className = 'ws-empty';
+      e2.textContent = 'Нет чатов';
+      chatsInner.appendChild(e2);
+    }
+    group.appendChild(chats);
+    elWsScroll.appendChild(group);
+  }
+  renderBreadcrumb();
+}
+
+function buildChatItem(ws, chat) {
+  const item = document.createElement('div');
+  item.className = 'chat-item' + (chat.id === state.activeChatId ? ' active' : '');
+  item.innerHTML = `
+    <div class="chat-main">
+      <div class="chat-title">
+        <span class="chat-name">${escapeHtml(chat.title || 'Чат')}</span>
+        ${chatTime(chat) ? `<span class="chat-time">${escapeHtml(chatTime(chat))}</span>` : ''}
+      </div>
+      ${chatPreview(chat) ? `<div class="chat-preview">${escapeHtml(chatPreview(chat))}</div>` : ''}
+    </div>
+    <div class="chat-actions">
+      <button class="chat-rename" title="Переименовать">✎</button>
+      <button class="chat-del" title="Удалить чат">✕</button>
+    </div>`;
+  const nameEl = item.querySelector('.chat-name');
+  nameEl.ondblclick = async (e) => {
+    e.stopPropagation();
+    const next = prompt('Переименовать чат:', chat.title || '');
+    if (next === null) return;
+    await api.workspaceRenameChat({ workspaceId: ws.id, chatId: chat.id, title: next });
+    if (state.activeChatId === chat.id) {
+      const local = state.workspaces.find((w) => w.id === ws.id);
+      const c = local && local.chats.find((x) => x.id === chat.id);
+      if (c) c.title = next.trim() || c.title;
+    }
+    await loadWorkspaces();
+    state.activeWorkspace = state.workspaces.find((w) => w.id === ws.id) || state.activeWorkspace;
+    renderWorkspaces();
+  };
+  item.querySelector('.chat-del').onclick = async (e) => {
+    e.stopPropagation();
+    if (state.settings && state.settings.confirmDelete !== false) {
+      if (!confirm('Удалить чат «' + (chat.title || 'Чат') + '»?')) return;
+    }
+    await api.workspaceDeleteChat({ workspaceId: ws.id, chatId: chat.id });
+    if (state.activeChatId === chat.id) newChat();
+    await loadWorkspaces();
+  };
+  item.querySelector('.chat-rename').onclick = (e) => {
+    e.stopPropagation();
+    nameEl.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  };
+  item.onclick = () => openChat(ws.id, chat.id);
+  return item;
+}
+
+function renderBreadcrumb() {
+  if (state.activeWorkspace) {
+    elCrumb.textContent = state.activeWorkspace.name;
+    elCrumb.title = state.activeWorkspace.path;
+  } else {
+    elCrumb.textContent = 'без проекта';
+    elCrumb.title = '';
+  }
+}
+
+async function pickWorkspace() {
+  const ws = await api.workspaceSelect();
+  if (ws) {
+    state.activeWorkspace = ws;
+    state.activeChatId = null;
+    await loadWorkspaces();
+    newChat();
+  }
+}
+
+async function activateWorkspace(id) {
+  const ws = await api.workspaceActivate(id);
+  if (ws) {
+    state.activeWorkspace = ws;
+    // держим список сайдбара синхронизированным с активным объектом,
+    // иначе refreshChatList() читает старый снапшот без нового чата
+    const idx = state.workspaces.findIndex((w) => w.id === ws.id);
+    if (idx >= 0) state.workspaces[idx] = ws;
+    else state.workspaces.unshift(ws);
+    state.activeChatId = null;
+    state.messages = [];
+    clearMessages();
+    renderWorkspaces();
+    persistUIState();
+    setStatus('green', 'проект: ' + ws.name);
+  }
+}
+
+/* ---------- conversations ---------- */
+
+function chatTitle() {
+  if (state.settings && state.settings.autoTitle === false) return 'Чат';
+  const m0 = state.messages.find((m) => m.role === 'user');
+  if (!m0) return 'Чат';
+  const c = m0.content;
+  const t = typeof c === 'string' ? c : (Array.isArray(c) && c[0] && c[0].text) || '';
+  return t.trim().slice(0, 42) || 'Чат';
+}
+
+function saveChat() {
+  if (!state.activeWorkspace) return;
+  const chat = {
+    id: state.activeChatId || 'chat_' + Date.now(),
+    title: chatTitle(),
+    messages: state.messages,
+    updatedAt: Date.now()
+  };
+  if (!state.activeChatId) state.activeChatId = chat.id;
+  state.activeWorkspace.chats = state.activeWorkspace.chats || [];
+  const idx = state.activeWorkspace.chats.findIndex((c) => c.id === chat.id);
+  if (idx >= 0) state.activeWorkspace.chats[idx] = chat;
+  else state.activeWorkspace.chats.unshift(chat);
+  api.workspaceSaveChat({ workspaceId: state.activeWorkspace.id, chat: { ...chat, messages: chat.messages.map((m) => ({ ...m })) } });
+  refreshChatList();
+}
+
+// точечное обновление списка чатов активного воркспейса — без перерисовки всего сайдбара
+function refreshChatList() {
+  if (!state.activeWorkspace) { renderWorkspaces(); return; }
+  const groups = elWsScroll.querySelectorAll('.ws-group');
+  let group = null;
+  for (const g of groups) {
+    if (g.dataset.wsId === state.activeWorkspace.id) { group = g; break; }
+  }
+  if (!group) { renderWorkspaces(); return; }
+  const chatsInner = group.querySelector('.ws-chats-inner') || group.querySelector('.ws-chats');
+  const ws = state.workspaces.find((w) => w.id === state.activeWorkspace.id) || state.activeWorkspace;
+  chatsInner.innerHTML = '';
+  if (!ws.chats.length) {
+    const e2 = document.createElement('div');
+    e2.className = 'ws-empty';
+    e2.textContent = 'Нет чатов';
+    chatsInner.appendChild(e2);
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  for (const chat of ws.chats) {
+    frag.appendChild(buildChatItem(ws, chat));
+  }
+  chatsInner.appendChild(frag);
+}
+
+function openChat(wsId, chatId) {
+  const ws = state.workspaces.find((w) => w.id === wsId);
+  const chat = ws && ws.chats.find((c) => c.id === chatId);
+  if (!chat) return;
+  state.activeWorkspace = ws;
+  state.activeChatId = chatId;
+  state.messages = chat.messages.map((m) => ({ ...m }));
+  clearMessages();
+  let i = 0;
+  for (const m of state.messages) {
+    if (m.role === 'user') {
+      const txt = typeof m.content === 'string' ? m.content : (m.content && Array.isArray(m.content) ? (m.content[0] && m.content[0].text || '') : '');
+      addUserMsg(txt, m.attachments).wrapper.style.setProperty('--msg-delay', Math.min(i * 45, 400) + 'ms');
+    } else if (m.role === 'assistant') {
+      const a = addAssistantMsgStreamingLabel(0);
+      a.wrapper.style.setProperty('--msg-delay', Math.min(i * 45, 400) + 'ms');
+      finalizeAssistant(a, m.content);
+    }
+    i++;
+  }
+  renderWorkspaces();
+  persistUIState();
+}
+
+/* ---------- chat ---------- */
+
+function newChat() {
+  state.activeChatId = null;
+  state.messages = [];
+  clearMessages();
+  renderWorkspaces();
+  persistUIState();
+}
+
+function clearMessages() {
+  elMessages.innerHTML = '';
+  elMessages.appendChild(elEmpty);
+  elEmpty.classList.remove('hidden');
+}
+
+function buildSystemMessage() {
+  let sys = state.settings.systemPrompt || '';
+  if (!sys.trim()) {
+    sys = 'Ты — полезный ассистент. Отвечай кратко и по делу, помогай пользователю с задачами.';
+  }
+  const lang = state.settings.language || 'ru';
+  const langRule = {
+    ru: 'Отвечай всегда на русском языке.',
+    en: 'Always respond in English.',
+    kk: 'Әрқашан қазақ тілінде жауап бер.',
+    uk: 'Відповідай завжди українською мовою.'
+  }[lang];
+  if (langRule) sys += '\n\n' + langRule;
+  sys += '\n\nВАЖНО: если пользователь прикрепил картинку — описывай ТОЛЬКО то, что реально видишь на ней. НЕ выдумывай детали, которых нет. Если изображение нечёткое/маленькое или ты не уверен — прямо скажи об этом и опиши только очевидное. Никогда не описывай окна, ошибки или интерфейсы, если их нет на скриншоте.';
+  if (state.settings.identityOverride && state.settings.publicName) {
+    sys += `\n\nТы — ${state.settings.publicName}. Так и представляйся. Используй имя «${state.settings.publicName}».`;
+  }
+  if (state.activeWorkspace) {
+    sys += `\n\nРабочая папка проекта: ${state.activeWorkspace.path}. Все пути в инструментах — относительные к ней.`;
+  }
+  sys += '\n\nСегодня: ' + new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) + '.';
+  const agentOn = !!(state.settings && state.settings.agentMode);
+  sys += '\n\nУ тебя ' + (agentOn ? 'есть доступ к инструментам' : 'нет доступа к инструментам') + ' (bash, файлы, интернет).';
+  if (state.settings && state.settings.webTools === false) sys += ' Веб-инструменты (поиск/чтение страниц) отключены.';
+  return sys;
+}
+
+function enabledSkills() {
+  return state.skills.filter((s) => state.skillEnabled[s.id]).map((s) => ({ ...s }));
+}
+
+// Скилы вставляем отдельным user-сообщением перед историей, а не в system,
+// потому что многие провайдеры (Kiro и др.) перебивают system prompt.
+function buildSkillPrompt() {
+  const list = enabledSkills();
+  if (!list.length) return '';
+  const blocks = list.map((s) => `## ${s.title}\n${s.description ? s.description + '\n' : ''}${s.body || ''}`);
+  return [
+    'Доступные скилы (справочный материал):',
+    '',
+    blocks.join('\n\n'),
+    '',
+    'Скилы — это справочники, а не задания. Применяй их ТОЛЬКО если запрос пользователя прямо и явно совпадает с их описанием.',
+    'НЕ предлагай активировать скил, НЕ рекламируй его и НЕ упоминай его в обычном разговоре или приветствии.',
+    'Если пользователь просто общается или задача не подходит ни одному скилу — работай без скилов, как обычно.'
+  ].join('\n');
+}
+
+const TEXT_EXTS = /\.(txt|md|markdown|js|jsx|ts|tsx|json|py|html|css|scss|xml|yml|yaml|sh|bat|ps1|cmd|cs|java|c|cpp|h|sql|log|ini|cfg|toml|env|gitignore|vue|svelte|php|rb|go|rs|swift|kt|dart|lua|r|pl|svg)$/i;
+
+function classifyFile(name) {
+  // картинки больше не отправляем в vision (провайдеры галлюцинируют) —
+  // они становятся просто меткой-вложением
+  if (TEXT_EXTS.test(name)) return 'text';
+  return 'binary';
+}
+
+function addPendingFiles(fileList) {
+  for (const f of fileList) {
+    state.pendingFiles.push({ name: f.name, size: f.size, kind: classifyFile(f.name), path: f.path || '' });
+  }
+  renderPendingFiles();
+}
+
+function renderPendingFiles() {
+  elAttachments.innerHTML = '';
+  if (!state.pendingFiles.length) { elAttachments.classList.add('hidden'); updateSendState(); return; }
+  elAttachments.classList.remove('hidden');
+  state.pendingFiles.forEach((pf, idx) => {
+    const chip = document.createElement('div');
+    chip.className = 'att-chip';
+    const icon = pf.kind === 'image' ? '🖼️' : (pf.kind === 'text' ? '📄' : '📎');
+    const size = pf.size > 1024 * 1024 ? (pf.size / 1024 / 1024).toFixed(1) + ' МБ' : Math.max(1, Math.round(pf.size / 1024)) + ' КБ';
+    chip.innerHTML = '<span class="att-ico">' + icon + '</span><span class="att-name">' + escapeHtml(pf.name) + '</span><span class="att-size">' + size + '</span><button class="att-x" data-i="' + idx + '" title="Убрать">×</button>';
+    elAttachments.appendChild(chip);
+  });
+  for (const b of elAttachments.querySelectorAll('.att-x')) {
+    b.addEventListener('click', () => { state.pendingFiles.splice(+b.dataset.i, 1); renderPendingFiles(); });
+  }
+}
+
+function updateSendState() {
+  elSend.disabled = state.streaming || (elInput.value.trim().length === 0 && !state.pendingFiles.length);
+}
+
+async function send() {
+  let text = elInput.value.trim();
+  if (state.streaming) return;
+  if (!text && !state.pendingFiles.length) return;
+
+  // активный чат мог быть удалён/пересоздан — если id не существует, стартуем новый
+  // в текущем проекте, чтобы сообщение не улетало в «Без проекта» со старым id.
+  if (state.activeChatId && state.activeWorkspace) {
+    const exists = (state.activeWorkspace.chats || []).some((c) => c.id === state.activeChatId);
+    if (!exists) state.activeChatId = null;
+  }
+
+  const model = elModel.value;
+  const attachments = [];
+
+  for (const pf of state.pendingFiles) {
+    if (pf.kind === 'image') continue; // vision отключён
+    const maxBytes = ((state.settings && state.settings.maxTextKb) || 500) * 1024;
+    if (pf.kind === 'text' && pf.size <= maxBytes) {
+      const r = await api.fsxReadAttached({ filePath: pf.path });
+      if (r && r.text !== null) {
+        const block = '\n\n[Приложенный файл: ' + pf.name + ']\n```\n' + r.text.slice(0, 30000) + '\n```\n';
+        text += block;
+        attachments.push({ name: pf.name, kind: 'text' });
+        continue;
+      }
+    }
+    attachments.push({ name: pf.name, kind: 'binary' });
+  }
+
+  // если остался пустой текст и нет вложений (например, были только картинки) — не отправляем
+  if (!text.trim() && !attachments.length) {
+    clearPendingFiles();
+    return;
+  }
+
+  const displayText = text;
+  addUserMsg(displayText, attachments);
+  elInput.value = '';
+  autosize();
+  clearPendingFiles();
+
+  const userContent = text;
+  state.messages.push({ role: 'user', content: userContent, attachments });
+  const systemMsg = buildSystemMessage();
+
+  let assistantEl = null;
+  let currentText = '';
+  let round = 0;
+
+  setStreaming(true);
+  setStatus('amber', 'Claude думает…');
+
+  unsubscribe = api.onAgentChunk((chunk) => {
+    if (chunk.type === 'text') {
+      round = chunk.round || round;
+      if (!assistantEl || (assistantEl.round !== chunk.round)) {
+        if (assistantEl) finalizeAssistant(assistantEl, currentText);
+        round = chunk.round || 0;
+        currentText = '';
+        assistantEl = addAssistantMsgStreamingLabel(round);
+        assistantEl.round = round;
+        pullToolCardsTo(assistantEl.wrapper);
+      }
+      currentText += chunk.text;
+      renderAssistant(assistantEl, currentText);
+    } else if (chunk.type === 'text_replace') {
+      // основной процесс распознал «текстовые» вызовы инструментов и убрал их из текста
+      if (assistantEl && assistantEl.round === chunk.round) {
+        currentText = chunk.text || '';
+        finalizeAssistant(assistantEl, currentText);
+      }
+    } else if (chunk.type === 'round') {
+      if (assistantEl && assistantEl.round !== chunk.round) {
+        finalizeAssistant(assistantEl, currentText);
+        round = chunk.round;
+        currentText = '';
+        assistantEl = addAssistantMsgStreamingLabel(chunk.round);
+        assistantEl.round = chunk.round;
+      }
+    } else if (chunk.type === 'tool_start') {
+      const target = assistantEl ? assistantEl.wrapper : null;
+      const card = addToolCard(target, { tool: chunk.tool, params: chunk.params, state: chunk.allowed ? 'running' : 'denied' });
+      card.dataset.callId = chunk.callId;
+      state.toolCards.push(card);
+      if (chunk.allowed) setStatus('amber', 'выполняю: ' + humanTool(chunk.tool));
+    } else if (chunk.type === 'tool_result') {
+      const card = state.toolCards.find((c) => c.dataset.callId === chunk.callId);
+      const stateIm = {
+        tool: chunk.tool,
+        state: chunk.result.includes('"approved": false') ? 'denied' : 'done',
+        resultText: chunk.result
+      };
+      setToolState(card, stateIm);
+      if (!chunk.result.includes('"approved": false')) setStatus('green', 'инструмент выполнен');
+    } else if (chunk.type === 'done') {
+      if (assistantEl) finalizeAssistant(assistantEl, currentText);
+      else {
+        assistantEl = addAssistantMsgStreamingLabel(0);
+        finalizeAssistant(assistantEl, chunk.text);
+      }
+      state.messages.push({ role: 'assistant', content: chunk.text });
+      finalize();
+      if (state.settings && state.settings.showTokens !== false && chunk.usage) {
+        const u = chunk.usage;
+        setStatus('green', 'готово · ' + ((u.prompt_tokens || 0) + (u.completion_tokens || 0)) + ' ток. в ответе');
+      } else {
+        setStatus('green', 'готово');
+      }
+    } else if (chunk.type === 'error') {
+      if (assistantEl) {
+        assistantEl.md.innerHTML = '<p style="color: var(--danger)">⚠️ ' + escapeHtml(chunk.message) + '</p>';
+      } else {
+        const a = addAssistantMsgStreamingLabel(0);
+        a.md.innerHTML = '<p style="color: var(--danger)">⚠️ ' + escapeHtml(chunk.message) + '</p>';
+      }
+      state.messages.push({ role: 'assistant', content: chunk.text || ('[ошибка] ' + chunk.message) });
+      finalize();
+      setStatus('red', 'ошибка');
+    } else if (chunk.type === 'aborted') {
+      if (assistantEl && currentText) {
+        assistantEl.md.innerHTML = renderMarkdown(currentText) + '<p style="color: var(--text-dim); font-size: 12px">· остановлено</p>';
+        state.messages.push({ role: 'assistant', content: currentText });
+      }
+      finalize();
+      setStatus('green', 'остановлено');
+    }
+  });
+
+  const history = state.messages.slice(0, -1).map((m) => ({ ...m }));
+  // бюджет контекста: отбрасываем самые старые сообщения, если история слишком длинная
+  const budget = (state.settings && state.settings.maxContextChars) || 120000;
+  if (budget > 0 && history.length) {
+    let total = 0;
+    const kept = [];
+    for (let i = history.length - 1; i >= 0; i--) {
+      const len = (history[i].content || '').length;
+      if (total + len > budget && kept.length) break;
+      total += len;
+      kept.unshift(history[i]);
+    }
+    history.length = 0;
+    for (const k of kept) history.push(k);
+  }
+  const skillPrompt = buildSkillPrompt();
+  const messages = [
+    { role: 'system', content: systemMsg },
+    ...(skillPrompt ? [{ role: 'user', content: skillPrompt }] : []),
+    ...history,
+    { role: 'user', content: userContent }
+  ];
+
+  let result = null;
+  try {
+    result = await api.startAgent({
+      workspaceId: state.activeWorkspace ? state.activeWorkspace.id : null,
+      model,
+      messages
+    });
+  } catch (err) {
+    // шлюз мог упасть без событий — снимаем блокировку и сообщаем об ошибке
+    if (state.streaming) {
+      state.messages.push({ role: 'assistant', content: '[ошибка запуска] ' + err.message });
+      finalize();
+      setStatus('red', 'ошибка');
+    }
+    return;
+  }
+
+  if (!state.streaming) return;
+  if (result && result.aborted && !currentText && !state.messages.some((m) => m.role === 'user' && m.content === userContent)) {
+    finalize();
+    setStatus('green', 'остановлено');
+  }
+}
+
+function clearPendingFiles() {
+  state.pendingFiles = [];
+  renderPendingFiles();
+}
+
+function pullToolCardsTo(wrapper) {
+  for (const card of state.toolCards) {
+    if (card.parentElement && card.parentElement !== wrapper) {
+      card.remove();
+      wrapper.appendChild(card);
+    }
+  }
+}
+
+function finalizeAssistant(el, text) {
+  if (!el) return;
+  mdLastFlush.delete(el.md);
+  renderAssistant(el, text || '', { live: false });
+  mdLastFlush.delete(el.md);
+}
+
+function finalize() {
+  setStreaming(false);
+  if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+  state.toolCards = [];
+  saveChat();
+}
+
+function setStreaming(on) {
+  state.streaming = on;
+  elSend.disabled = on || (elInput.value.trim().length === 0 && !state.pendingFiles.length);
+  elSend.classList.toggle('hidden', on);
+  elStop.classList.toggle('hidden', !on);
+}
+
+function stop() {
+  api.stopAgent();
+}
+
+/* ---------- models ---------- */
+
+async function loadModels() {
+  setStatus('amber', 'загрузка моделей…');
+  let models = [];
+  try {
+    const res = await api.listModels(state.settings);
+    if (res && res.error) throw new Error(res.error);
+    models = res || [];
+  } catch (_) {
+    setStatus('red', 'нет связи со шлюзом');
+    elModel.innerHTML = '';
+    const o = document.createElement('option');
+    o.value = 'auto'; o.textContent = 'auto (шлюз недоступен)';
+    elModel.appendChild(o);
+    return;
+  }
+  state.models = models;
+  const claude = models.map((m) => m.id).filter((id) => /claude/i.test(id)).sort();
+
+  elModel.innerHTML = '';
+  elModel.appendChild(op('auto', 'auto · умный роутинг', (!state.settings.model || state.settings.model === 'auto')));
+
+  const seen = new Set();
+  const prefs = ['kr/claude-sonnet-4.5', 'kr/claude-sonnet-5', 'kr/claude-opus', 'kiro/claude-sonnet-5'];
+  for (const p of prefs) if (claude.includes(p)) addOpt(p, seen);
+  for (const m of claude) if (!/no-think|low|medium|high|xhigh/.test(m)) addOpt(m, seen);
+
+  if (state.settings.model && Array.from(elModel.options).some((o) => o.value === state.settings.model)) {
+    elModel.value = state.settings.model;
+  }
+  setStatus('green', claude.length + ' моделей · шлюз OK');
+}
+
+function op(value, label, selected) {
+  const o = document.createElement('option');
+  o.value = value;
+  o.textContent = label;
+  if (selected) o.selected = true;
+  return o;
+}
+
+function addOpt(id, seen) {
+  if (seen.has(id)) return;
+  seen.add(id);
+  elModel.appendChild(op(id, prettyModel(id)));
+}
+
+/* ---------- skills ---------- */
+
+function persistSkillToggles() {
+  const enabled = state.skills.filter((s) => state.skillEnabled[s.id]).map((s) => s.id);
+  api.setSettings({ enabledSkills: enabled }).catch(() => {});
+}
+
+async function loadSkills() {
+  state.skills = await api.listSkills();
+  const saved = state.settings && state.settings.enabledSkills;
+  const savedSet = Array.isArray(saved) && saved.length ? new Set(saved) : null;
+  state.skillEnabled = {};
+  for (const s of state.skills) {
+    state.skillEnabled[s.id] = savedSet ? savedSet.has(s.id) : s.enabled;
+  }
+  renderSkills();
+}
+
+function toggleSkill(id, el) {
+  state.skillEnabled[id] = !state.skillEnabled[id];
+  if (el) el.className = 'skill-toggle' + (state.skillEnabled[id] ? ' on' : '');
+  persistSkillToggles();
+}
+
+function renderSkills() {
+  elSkillsList.innerHTML = '';
+  if (!state.skills.length) {
+    const d = document.createElement('div');
+    d.className = 'skill-empty';
+    d.textContent = 'Скилов нет. Нажми + чтобы создать.';
+    elSkillsList.appendChild(d);
+    return;
+  }
+  for (const skill of state.skills) {
+    const item = document.createElement('div');
+    item.className = 'skill-item';
+
+    const toggle = document.createElement('div');
+    toggle.className = 'skill-toggle' + (state.skillEnabled[skill.id] ? ' on' : '');
+    toggle.onclick = () => toggleSkill(skill.id, toggle);
+    item.appendChild(toggle);
+
+    const meta = document.createElement('div');
+    meta.className = 'skill-meta';
+    const name = document.createElement('div');
+    name.className = 'skill-name';
+    name.textContent = skill.title;
+    const desc = document.createElement('div');
+    desc.className = 'skill-desc';
+    desc.textContent = skill.description || skill.id;
+    meta.appendChild(name);
+    meta.appendChild(desc);
+    meta.onclick = () => openSkillEditor(skill);
+    item.appendChild(meta);
+    elSkillsList.appendChild(item);
+  }
+}
+
+/* ---------- skill editor ---------- */
+
+let skillEditing = null;
+
+async function openSkillEditor(skill) {
+  if (skill.editable === false) {
+    const r = await api.readSkillBody(skill.id);
+    $('skill-new-name').value = skill.title;
+    $('skill-new-desc').value = skill.description;
+    $('skill-body').value = r.error ? '' : dedentBody(r.content);
+    skillEditing = { ...skill, readOnly: true };
+  } else {
+    const r = await api.readSkillBody(skill.id);
+    $('skill-new-name').value = skill.title;
+    $('skill-new-desc').value = skill.description;
+    $('skill-body').value = r.error ? '' : dedentBody(r.content);
+    skillEditing = skill;
+  }
+  $('skill-modal-title').textContent = 'Скил: ' + skill.title;
+  $('skill-form').classList.toggle('hidden', !!skillEditing.readOnly);
+  $('skill-remove').classList.toggle('hidden', !!skillEditing.readOnly || !skill.id);
+  $('skill-save').classList.toggle('hidden', !!skillEditing.readOnly);
+  $('skill-modal').classList.remove('hidden');
+}
+
+function dedentBody(content) {
+  const m = content.match(/^---\s*\n([\s\S]*?)\n---\s*/);
+  return m ? content.slice(m[0].length).trim() : content;
+}
+
+async function saveSkill() {
+  if (!skillEditing) return;
+  const body = $('#skill-body').value.trim();
+  if (skillEditing.readOnly) {
+    await api.updateSkillBody({ id: skillEditing.id, body: body });
+  } else {
+    // convert to full SKILL.md
+    const full = `---\nname: ${$('skill-new-name').value.trim()}\ndescription: ${$('skill-new-desc').value.trim()}\n---\n\n${body}\n`;
+    await api.updateSkillBody({ id: skillEditing.id, body: full });
+  }
+  $('skill-modal').classList.add('hidden');
+  skillEditing = null;
+  await loadSkills();
+}
+
+async function createSkill() {
+  $('skill-new-name').value = '';
+  $('skill-new-desc').value = '';
+  $('skill-body').value = '';
+  skillEditing = { isNew: true };
+  $('skill-modal-title').textContent = 'Новый скил';
+  $('skill-form').classList.remove('hidden');
+  $('skill-remove').classList.add('hidden');
+  $('skill-modal').classList.remove('hidden');
+}
+
+async function saveNewSkill() {
+  const name = $('skill-new-name').value.trim();
+  const desc = $('skill-new-desc').value.trim();
+  const body = $('skill-body').value.trim();
+  const res = await api.createSkill({ name, description: desc });
+  if (res.error) { alert(res.error); return; }
+  await api.updateSkillBody({ id: res.id, body: '---\nname: ' + name + '\ndescription: ' + desc + '\n---\n\n' + body + '\n' });
+  $('skill-modal').classList.add('hidden');
+  await loadSkills();
+}
+
+function onSkillSave() {
+  if (skillEditing && skillEditing.isNew) saveNewSkill();
+  else saveSkill();
+}
+
+async function removeSkill() {
+  if (!skillEditing || skillEditing.readOnly) return;
+  await api.removeSkill(skillEditing.id);
+  $('skill-modal').classList.add('hidden');
+  await loadSkills();
+}
+
+/* ---------- skill install ---------- */
+
+function openSkillInstall() {
+  $('skill-install-cmd').value = '';
+  $('skill-install-output').classList.add('hidden');
+  $('skill-install-output').textContent = '';
+  $('skill-install-modal').classList.remove('hidden');
+}
+
+async function runSkillInstall() {
+  const cmd = $('skill-install-cmd').value.trim();
+  if (!cmd) return;
+  const out = $('skill-install-output');
+  out.classList.remove('hidden');
+  out.textContent = 'Выполняется: ' + cmd + '\n';
+  const btn = $('skill-install-run');
+  btn.disabled = true;
+  try {
+    const res = await api.installSkill({ command: cmd });
+    let text = '';
+    try {
+      const r = JSON.parse(res?.output || '{}');
+      text = r.stdout || r.stderr || '';
+      if (r.error) text += '\n' + r.error;
+    } catch (_) { text = String(res?.output || ''); }
+    out.textContent = out.textContent + '--- вывод ---\n' + (text || '(пусто)') + '\n\n';
+    if (res && Array.isArray(res.installed) && res.installed.length) {
+      out.textContent += 'Установлено: ' + res.installed.map((i) => i.name + (i.updated ? ' (обновлён)' : '')).join(', ') + '\n';
+    } else {
+      out.textContent += 'Не нашлось новых SKILL.md.\n';
+    }
+    await loadSkills();
+  } catch (err) {
+    out.textContent += '\nОшибка: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ---------- approval ---------- */
+
+let approvalResolve = null;
+
+async function setupApproval() {
+  api.onApproval((payload) => {
+    $('approval-label').textContent = payload.humanized.label + ' · нужно разрешение';
+    $('approval-title').textContent = payload.humanized.title || '';
+    $('approval-code').textContent = payload.humanized.code || '';
+    $('approval-remember').checked = false;
+    $('approval-global').checked = false;
+    $('approval').classList.remove('hidden');
+    approvalResolve = (res) => {
+      $('approval').classList.add('hidden');
+      api.replyApproval(res);
+    };
+  });
+
+  $('approval-allow').onclick = () => {
+    const r = approvalResolve; approvalResolve = null;
+    if (r) r({ allow: true, remember: $('approval-remember').checked, globally: $('approval-global').checked });
+  };
+  $('approval-deny').onclick = () => {
+    const r = approvalResolve; approvalResolve = null;
+    if (r) r({ allow: false, remember: $('approval-remember').checked, globally: $('approval-global').checked });
+  };
+}
+
+/* ---------- surveys/polls ---------- */
+
+function showPollCard(payload) {
+  const poll = payload.poll || {};
+  const callId = payload.callId;
+  const title = poll.title || '';
+  const question = poll.question || 'Вопрос';
+  const options = Array.isArray(poll.options) ? poll.options : [];
+  const multiple = !!poll.multiple;
+  const allowCustom = poll.allowCustom !== false;
+
+  const wrapper = state.lastAssistant || elMessages;
+  const card = document.createElement('div');
+  card.className = 'poll-card';
+  card.dataset.callId = callId;
+  const id = 'poll' + String(callId).replace(/\W/g, '') + Date.now();
+
+  let optionsHtml = '';
+  options.forEach((opt, i) => {
+    let value = opt, desc = '';
+    if (opt && typeof opt === 'object') { value = opt.value ?? opt.name ?? opt.text ?? ''; desc = opt.description || opt.desc || ''; }
+    value = String(value).trim();
+    if (!value) return;
+    optionsHtml += `
+      <label class="poll-opt">
+        <input type="${multiple ? 'checkbox' : 'radio'}" name="${id}" value="${escapeHtml(value)}" data-i="${i}">
+        <span class="poll-box"></span>
+        <span class="poll-opt-txt">${escapeHtml(value)}${desc ? '<span class="poll-opt-desc">' + escapeHtml(desc) + '</span>' : ''}</span>
+      </label>`;
+  });
+
+  if (allowCustom) {
+    optionsHtml += `
+      <label class="poll-opt poll-custom">
+        <input type="${multiple ? 'checkbox' : 'radio'}" name="${id}" value="__custom__">
+        <span class="poll-box"></span>
+        <span class="poll-opt-txt">Свой вариант:</span>
+        <input type="text" class="poll-custom-input" placeholder="напиши свой…">
+      </label>`;
+  }
+
+  card.innerHTML = `
+    <div class="poll-body">
+      ${title ? '<div class="poll-title">' + escapeHtml(title) + '</div>' : ''}
+      <div class="poll-q">${escapeHtml(question)}</div>
+      <div class="poll-opts">${optionsHtml}</div>
+      <div class="poll-actions">
+        <button class="poll-send" disabled>Ответить</button>
+        <button class="poll-skip">Пропустить</button>
+      </div>
+      <div class="poll-answer hidden"></div>
+    </div>`;
+
+  const sendBtn = card.querySelector('.poll-send');
+  const optsBox = card.querySelector('.poll-opts');
+  const answerBox = card.querySelector('.poll-answer');
+  const customInput = card.querySelector('.poll-custom-input');
+
+  const hasCustomText = () => customInput && customInput.value.trim().length > 0;
+  const checkedCount = () => optsBox.querySelectorAll('input:checked').length;
+  const refreshSend = () => {
+    if (!sendBtn) return;
+    sendBtn.disabled = checkedCount() === 0 && !hasCustomText();
+  };
+
+  const submit = (viaCustom) => {
+    const picks = [];
+    let custom = '';
+    optsBox.querySelectorAll('input:checked').forEach((i) => {
+      if (i.value === '__custom__') custom = hasCustomText() ? customInput.value.trim() : '';
+      else picks.push(i.value);
+    });
+    if (viaCustom && hasCustomText()) custom = customInput.value.trim();
+    if (!picks.length && !custom) { refreshSend(); return; }
+    card.classList.add('answered');
+    optsBox.querySelectorAll('input').forEach((i) => (i.disabled = true));
+    if (sendBtn) sendBtn.disabled = true;
+    if (customInput) customInput.disabled = true;
+    const parts = [];
+    if (picks.length) parts.push(picks.join(', '));
+    if (custom) parts.push('✍️ ' + custom);
+    answerBox.textContent = '✓ Ты ответил: ' + (parts.join(' · ') || '—');
+    answerBox.classList.remove('hidden');
+    api.replyPoll({ callId, picks, custom });
+    scrollToBottom();
+  };
+
+  optsBox.querySelectorAll('input').forEach((i) => {
+    i.addEventListener('change', () => {
+      if (!multiple && i.checked && i.value !== '__custom__') submit(false);
+      else refreshSend();
+    });
+  });
+  if (customInput) {
+    customInput.addEventListener('input', refreshSend);
+    customInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const radio = optsBox.querySelector('input[value="__custom__"]');
+        if (radio && !multiple) radio.checked = true;
+        submit(true);
+      }
+    });
+  }
+  sendBtn.addEventListener('click', () => submit(false));
+  card.querySelector('.poll-skip').addEventListener('click', () => {
+    api.replyPoll({ callId, picks: [], custom: '' });
+    card.classList.add('answered');
+    optsBox.querySelectorAll('input').forEach((i) => (i.disabled = true));
+    if (customInput) customInput.disabled = true;
+    answerBox.textContent = '— пропущено';
+    answerBox.classList.remove('hidden');
+    scrollToBottom();
+  });
+  refreshSend();
+
+  wrapper.appendChild(card);
+  scrollToBottom();
+}
+
+function setupPoll() {
+  api.onPoll((payload) => showPollCard(payload));
+}
+
+/* ---------- settings ---------- */
+
+function openSettings() {
+  api.getSettings().then((s) => {
+    $('cfg-baseurl').value = s.baseUrl;
+    $('cfg-apikey').value = s.apiKey;
+    $('cfg-idle').value = Math.round((Number(s.streamIdleMs) || 45000) / 1000);
+    $('cfg-idle-val').textContent = Math.round((Number(s.streamIdleMs) || 45000) / 1000) + 'с';
+    $('cfg-req-timeout').value = Math.round((Number(s.requestTimeoutMs) || 120000) / 1000);
+    $('cfg-temperature').value = s.temperature;
+    $('cfg-temperature-val').textContent = s.temperature;
+    $('cfg-topp').value = s.topP;
+    $('cfg-topp-val').textContent = s.topP;
+    $('cfg-frequency').value = s.frequencyPenalty;
+    $('cfg-frequency-val').textContent = s.frequencyPenalty;
+    $('cfg-presence').value = s.presencePenalty;
+    $('cfg-presence-val').textContent = s.presencePenalty;
+    $('cfg-max-tokens').value = s.maxTokens;
+    $('cfg-max-rounds').value = s.maxToolRounds;
+    $('cfg-empty-retries').value = s.maxEmptyRetries != null ? s.maxEmptyRetries : 4;
+    $('cfg-seed').value = s.seed != null ? s.seed : '';
+    $('cfg-context').value = Math.round((s.maxContextChars || 120000) / 1000);
+    $('cfg-agent').checked = s.agentMode;
+    $('cfg-approve').value = s.autoApprove || 'ask';
+    $('cfg-webtools').checked = s.webTools !== false;
+    $('cfg-loopguard').checked = s.loopProtection !== false;
+    $('cfg-accent').value = s.accent || 'terracotta';
+    $('cfg-theme').value = s.theme === 'dark' ? 'dark' : 'light';
+    $('cfg-font-size').value = s.fontSize || 14;
+    $('cfg-font-size-val').textContent = (s.fontSize || 14) + 'px';
+    $('cfg-density').value = s.density || 'comfortable';
+    $('cfg-animations').checked = s.animations !== false;
+    $('cfg-autoscroll').checked = s.autoScroll !== false;
+    $('cfg-radius').value = s.radius != null ? s.radius : 14;
+    $('cfg-radius-val').textContent = (s.radius != null ? s.radius : 14) + 'px';
+    $('cfg-msgwidth').value = s.messageWidth || 780;
+    $('cfg-msgwidth-val').textContent = (s.messageWidth || 780) + 'px';
+    $('cfg-codewrap').checked = s.codeWrap === true;
+    $('cfg-showtokens').checked = s.showTokens !== false;
+    $('cfg-enter').checked = s.enterToSend !== false;
+    $('cfg-confirmdel').checked = s.confirmDelete !== false;
+    $('cfg-maxtext').value = s.maxTextKb || 500;
+    $('cfg-restore').checked = s.restoreOnStart !== false;
+    $('cfg-autotitle').checked = s.autoTitle !== false;
+    $('cfg-language').value = s.language || 'ru';
+    $('cfg-publicname').value = s.publicName || 'Claude';
+    $('cfg-identity').checked = s.identityOverride !== false;
+    $('cfg-sysprompt').value = s.systemPrompt || '';
+    $('conn-test-result').classList.add('hidden');
+    fillSettingsModelSelect(s.model || 'auto');
+    renderSettingsSkills();
+    state.mcpServers = JSON.parse(JSON.stringify(s.mcpServers || []));
+    renderMcpList();
+    $('settings-modal').classList.remove('hidden');
+  });
+}
+
+function fillSettingsModelSelect(current) {
+  const sel = $('cfg-model');
+  sel.innerHTML = '';
+  sel.appendChild(op('auto', 'auto · умный роутинг', current === 'auto'));
+  const claude = state.models.map((m) => m.id).filter((id) => /claude/i.test(id)).sort();
+  const seen = new Set();
+  const prefs = ['kr/claude-sonnet-4.5', 'kr/claude-sonnet-5', 'kr/claude-opus', 'kiro/claude-sonnet-5'];
+  for (const p of prefs) if (claude.includes(p)) addOptTo(sel, p, current, seen);
+  for (const m of claude) if (!/no-think|low|medium|high|xhigh/.test(m)) addOptTo(sel, m, current, seen);
+  const others = state.models.map((m) => m.id).filter((id) => !/claude/i.test(id) && !/^(auto|kr|kiro)\//.test(id)).sort();
+  for (const m of others) addOptTo(sel, m, current, seen);
+}
+
+function addOptTo(sel, id, current, seen) {
+  if (seen.has(id)) return;
+  seen.add(id);
+  const o = op(id, prettyModel(id), current === id);
+  sel.appendChild(o);
+}
+
+function renderSettingsSkills() {
+  const listEl = $('settings-skills-list');
+  listEl.innerHTML = '';
+  if (!state.skills.length) {
+    const d = document.createElement('div');
+    d.className = 'skill-empty';
+    d.textContent = 'Скилов пока нет. Создай или установи командой.';
+    listEl.appendChild(d);
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  for (const skill of state.skills) {
+    const item = document.createElement('div');
+    item.className = 'skills-nav-item';
+    const toggle = document.createElement('div');
+    toggle.className = 'skill-toggle' + (state.skillEnabled[skill.id] ? ' on' : '');
+    toggle.onclick = (e) => {
+      e.stopPropagation();
+      toggleSkill(skill.id, toggle);
+    };
+    item.appendChild(toggle);
+    const meta = document.createElement('div');
+    meta.className = 'skill-meta';
+    const name = document.createElement('div');
+    name.className = 'skill-name';
+    name.textContent = skill.title;
+    const desc = document.createElement('div');
+    desc.className = 'skill-desc';
+    desc.textContent = skill.description || skill.id;
+    meta.appendChild(name);
+    meta.appendChild(desc);
+    meta.onclick = () => openSkillEditor(skill);
+    item.appendChild(meta);
+    frag.appendChild(item);
+  }
+  listEl.appendChild(frag);
+}
+
+function closeSettings() {
+  $('settings-modal').classList.add('hidden');
+}
+
+/* ---------- MCP servers ---------- */
+
+function renderMcpList() {
+  const listEl = $('mcp-list');
+  listEl.innerHTML = '';
+  if (!state.mcpServers.length) {
+    const d = document.createElement('div');
+    d.className = 'skill-empty';
+    d.textContent = 'Серверов пока нет. Добавь, например: npx -y @modelcontextprotocol/server-filesystem C:\\Projects или URL http://localhost:3001/mcp.';
+    listEl.appendChild(d);
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  state.mcpServers.forEach((srv, idx) => {
+    const item = document.createElement('div');
+    item.className = 'mcp-item';
+
+    const head = document.createElement('div');
+    head.className = 'mcp-item-head';
+
+    const toggle = document.createElement('label');
+    toggle.className = 'chk';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = srv.enabled !== false;
+    cb.onchange = () => { srv.enabled = cb.checked; renderMcpList(); };
+    toggle.appendChild(cb);
+    const labelSpan = document.createElement('span');
+    labelSpan.textContent = 'вкл';
+    toggle.appendChild(labelSpan);
+    head.appendChild(toggle);
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = 'Имя (лат., одно слово)';
+    nameInput.value = srv.id || '';
+    nameInput.spellcheck = false;
+    nameInput.onchange = () => { srv.id = nameInput.value.trim().replace(/\s+/g, '_'); if (srv.id !== nameInput.value) nameInput.value = srv.id; };
+    head.appendChild(nameInput);
+
+    const badge = document.createElement('span');
+    badge.className = 'mcp-item-badge' + (srv.enabled === false ? ' disabled' : '');
+    badge.textContent = /^https?:\/\//i.test((srv.url || '').trim()) ? 'HTTP' : 'команда';
+    head.appendChild(badge);
+
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = '✕';
+    del.title = 'Удалить сервер';
+    del.onclick = () => { state.mcpServers.splice(idx, 1); renderMcpList(); };
+    head.appendChild(del);
+
+    item.appendChild(head);
+
+    const cmd = document.createElement('textarea');
+    cmd.rows = 2;
+    cmd.spellcheck = false;
+    cmd.placeholder = 'Команда запуска, напр. npx -y @modelcontextprotocol/server-filesystem C:\\Projects\nили URL, напр. http://localhost:3001/mcp';
+    if (/^https?:\/\//i.test((srv.url || '').trim())) {
+      cmd.value = srv.url;
+    } else {
+      cmd.value = srv.command || '';
+    }
+    cmd.onchange = () => {
+      const v = cmd.value.trim();
+      if (/^https?:\/\//i.test(v)) { srv.url = v; srv.command = ''; }
+      else { srv.command = v; srv.url = ''; }
+      badge.textContent = /^https?:\/\//i.test(v) ? 'HTTP' : 'команда';
+    };
+    item.appendChild(cmd);
+
+    const testBtn = document.createElement('button');
+    testBtn.className = 'btn';
+    testBtn.textContent = 'Проверить';
+    testBtn.onclick = async () => {
+      testBtn.disabled = true;
+      resultEl.className = 'mcp-test-result';
+      resultEl.textContent = 'Подключаюсь…';
+      const server = currentServer();
+      const res = await api.mcpTest(server);
+      testBtn.disabled = false;
+      if (res && res.ok) {
+        resultEl.className = 'mcp-test-result ok';
+        resultEl.textContent = `OK: найдено инструментов — ${res.tools}`;
+      } else {
+        resultEl.className = 'mcp-test-result bad';
+        resultEl.textContent = 'Ошибка: ' + ((res && res.error) || 'неизвестная');
+      }
+    };
+
+    const resultEl = document.createElement('div');
+    resultEl.className = 'mcp-test-result';
+    item.appendChild(testBtn);
+    item.appendChild(resultEl);
+
+    const currentServer = () => {
+      const v = cmd.value.trim();
+      const enabled = cb.checked;
+      if (/^https?:\/\//i.test(v)) return { id: nameInput.value.trim().replace(/\s+/g, '_') || `mcp_${idx + 1}`, url: v, command: '', enabled };
+      return { id: nameInput.value.trim().replace(/\s+/g, '_') || `mcp_${idx + 1}`, command: v, url: '', enabled };
+    };
+
+    frag.appendChild(item);
+  });
+  listEl.appendChild(frag);
+}
+
+function addMcpServer() {
+  state.mcpServers.push({ id: 'mcp_' + (state.mcpServers.length + 1), command: '', url: '', enabled: true });
+  renderMcpList();
+}
+
+async function testConnection() {
+  const box = $('conn-test-result');
+  box.classList.remove('hidden');
+  box.className = 'conn-result';
+  box.textContent = 'Проверяю…';
+  const res = await api.testConnection({
+    baseUrl: $('cfg-baseurl').value.trim(),
+    apiKey: $('cfg-apikey').value.trim()
+  });
+  box.classList.remove('hidden');
+  if (res && res.ok) {
+    box.className = 'conn-result ok';
+    box.textContent = `Подключение успешно: ${res.count} моделей доступно, ответ за ${res.timeMs} мс.`;
+  } else {
+    box.className = 'conn-result fail';
+    box.textContent = 'Ошибка: ' + ((res && res.error) || 'неизвестная');
+  }
+}
+
+async function resetSettings() {
+  if (!confirm('Сбросить все настройки к значениям по умолчанию?')) return;
+  state.settings = await api.resetSettings();
+  closeSettings();
+  applyUiSettings();
+  loadModels();
+}
+
+async function saveSettings() {
+  const patch = {
+    baseUrl: $('cfg-baseurl').value.trim(),
+    apiKey: $('cfg-apikey').value.trim(),
+    streamIdleMs: (parseInt($('cfg-idle').value, 10) || 45) * 1000,
+    requestTimeoutMs: (parseInt($('cfg-req-timeout').value, 10) || 120) * 1000,
+    temperature: parseFloat($('cfg-temperature').value),
+    topP: parseFloat($('cfg-topp').value),
+    frequencyPenalty: parseFloat($('cfg-frequency').value),
+    presencePenalty: parseFloat($('cfg-presence').value),
+    maxTokens: parseInt($('cfg-max-tokens').value, 10) || 8192,
+    maxToolRounds: parseInt($('cfg-max-rounds').value, 10) || 40,
+    maxEmptyRetries: parseInt($('cfg-empty-retries').value, 10) || 4,
+    seed: $('cfg-seed').value === '' ? null : parseInt($('cfg-seed').value, 10) || null,
+    maxContextChars: (parseInt($('cfg-context').value, 10) || 120) * 1000,
+    agentMode: $('cfg-agent').checked,
+    autoApprove: $('cfg-approve').value,
+    webTools: $('cfg-webtools').checked,
+    loopProtection: $('cfg-loopguard').checked,
+    accent: $('cfg-accent').value,
+    theme: $('cfg-theme').value,
+    fontSize: parseInt($('cfg-font-size').value, 10) || 14,
+    density: $('cfg-density').value,
+    animations: $('cfg-animations').checked,
+    autoScroll: $('cfg-autoscroll').checked,
+    radius: parseInt($('cfg-radius').value, 10) || 14,
+    messageWidth: parseInt($('cfg-msgwidth').value, 10) || 780,
+    codeWrap: $('cfg-codewrap').checked,
+    showTokens: $('cfg-showtokens').checked,
+    enterToSend: $('cfg-enter').checked,
+    confirmDelete: $('cfg-confirmdel').checked,
+    maxTextKb: parseInt($('cfg-maxtext').value, 10) || 500,
+    restoreOnStart: $('cfg-restore').checked,
+    autoTitle: $('cfg-autotitle').checked,
+    language: $('cfg-language').value,
+    publicName: $('cfg-publicname').value.trim() || 'Claude',
+    identityOverride: $('cfg-identity').checked,
+    systemPrompt: $('cfg-sysprompt').value,
+    model: $('cfg-model').value,
+    mcpServers: state.mcpServers.map((s) => ({
+      id: (s.id || '').trim().replace(/\s+/g, '_') || 'mcp',
+      command: s.command || '',
+      url: s.url || '',
+      enabled: s.enabled !== false
+    })).filter((s) => s.id && (s.command || s.url))
+  };
+  state.settings = await api.setSettings(patch);
+  closeSettings();
+  smoothThemeSwitch();
+  applyUiSettings();
+  const off = $('#agent-tip');
+  if (off) off.textContent = patch.agentMode
+    ? 'Агентный режим включён: могу читать/редактировать файлы и запускать команды — спрашивая разрешение.'
+    : 'Агентный режим выключен: обычный чат без инструментов.';
+  loadModels();
+}
+
+function applyUiSettings() {
+  const s = state.settings;
+  document.body.classList.toggle('dark', s.theme === 'dark');
+  document.body.classList.toggle('light', s.theme !== 'dark');
+  document.body.dataset.accent = s.accent || 'terracotta';
+  document.body.dataset.density = s.density || 'comfortable';
+  document.body.dataset.anim = s.animations === false ? 'off' : 'on';
+  document.body.dataset.codewrap = s.codeWrap === true ? 'on' : 'off';
+  const appEl = $('#app');
+  if (appEl) {
+    appEl.style.zoom = (Number(s.fontSize) || 14) / 14;
+    const root = document.documentElement;
+    root.style.setProperty('--ui-radius', (s.radius != null ? s.radius : 14) + 'px');
+    root.style.setProperty('--msg-max-width', (s.messageWidth || 780) + 'px');
+  }
+}
+
+function smoothThemeSwitch() {
+  document.body.classList.add('theme-anim');
+  clearTimeout(smoothThemeSwitch._t);
+  smoothThemeSwitch._t = setTimeout(() => document.body.classList.remove('theme-anim'), 350);
+}
+
+function setupSettingsTabs() {
+  const nav = document.querySelectorAll('#settings-nav .stab');
+  for (const btn of nav) {
+    btn.onclick = () => {
+      for (const b of nav) b.classList.remove('active');
+      btn.classList.add('active');
+      for (const p of document.querySelectorAll('.spanel')) p.classList.remove('active');
+      $('spanel-' + btn.dataset.tab).classList.add('active');
+    };
+  }
+
+  const bindVal = (rangeId, valId, suffix) => {
+    const r = $(rangeId), v = $(valId);
+    if (!r || !v) return;
+    r.addEventListener('input', () => { v.textContent = r.value + (suffix || ''); });
+  };
+  bindVal('cfg-temperature', 'cfg-temperature-val');
+  bindVal('cfg-topp', 'cfg-topp-val');
+  bindVal('cfg-frequency', 'cfg-frequency-val');
+  bindVal('cfg-presence', 'cfg-presence-val');
+  bindVal('cfg-idle', 'cfg-idle-val', 'с');
+  bindVal('cfg-font-size', 'cfg-font-size-val', 'px');
+  bindVal('cfg-radius', 'cfg-radius-val', 'px');
+  bindVal('cfg-msgwidth', 'cfg-msgwidth-val', 'px');
+}
+
+/* ---------- init ---------- */
+
+async function init() {
+  state.settings = await api.getSettings();
+  applyUiSettings();
+
+  const off = $('#agent-tip');
+  if (off) off.textContent = state.settings.agentMode
+    ? 'Агентный режим включён: могу читать/редактировать файлы и запускать команды — спрашивая разрешение.'
+    : 'Агентный режим выключен: обычный чат без инструментов.';
+
+  elInput.addEventListener('input', () => { autosize(); updateSendState(); });
+  elInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const enterToSend = state.settings && state.settings.enterToSend !== false;
+    if (e.shiftKey) return; // Shift+Enter всегда новая строка
+    if (enterToSend ? true : e.ctrlKey) { e.preventDefault(); send(); }
+  });
+  elSend.addEventListener('click', send);
+  elStop.addEventListener('click', stop);
+  elModel.addEventListener('change', () => {
+    state.settings = Object.assign({}, state.settings, { model: elModel.value });
+    api.setSettings({ model: elModel.value }).catch(() => {});
+  });
+  if (elAttach) elAttach.addEventListener('click', () => elFileInput && elFileInput.click());
+  if (elFileInput) elFileInput.addEventListener('change', () => { addPendingFiles(Array.from(elFileInput.files || [])); elFileInput.value = ''; });
+  const dropZone = $('#composer');
+  if (dropZone) {
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); addPendingFiles(e.dataTransfer ? Array.from(e.dataTransfer.files || []) : []); });
+  }
+  $('new-chat-btn').addEventListener('click', newChat);
+  $('add-ws-btn').addEventListener('click', pickWorkspace);
+  $('empty-add-ws').addEventListener('click', pickWorkspace);
+  $('empty-new-chat').addEventListener('click', newChat);
+  $('settings-btn').addEventListener('click', openSettings);
+  $('theme-btn').addEventListener('click', toggleTheme);
+  $('modal-close').addEventListener('click', closeSettings);
+  $('save-settings').addEventListener('click', saveSettings);
+  $('skill-add-btn').addEventListener('click', createSkill);
+  $('skill-save').addEventListener('click', onSkillSave);
+  $('skill-remove').addEventListener('click', removeSkill);
+  $('skill-modal-close').addEventListener('click', () => $('skill-modal').classList.add('hidden'));
+  $('skill-install-btn').addEventListener('click', openSkillInstall);
+  $('skill-install-close').addEventListener('click', () => $('skill-install-modal').classList.add('hidden'));
+  $('skill-install-run').addEventListener('click', runSkillInstall);
+  setupSettingsTabs();
+  $('refresh-models-panel').addEventListener('click', loadModels);
+  $('test-conn-panel').addEventListener('click', testConnection);
+  $('reset-settings-panel').addEventListener('click', resetSettings);
+  $('clear-rules-panel').addEventListener('click', async () => { await api.clearRules(); setStatus('green', 'правила сброшены'); });
+  $('settings-skill-install').addEventListener('click', openSkillInstall);
+  $('settings-skill-add').addEventListener('click', createSkill);
+  $('mcp-add').addEventListener('click', addMcpServer);
+
+  setupApproval();
+  setupPoll();
+  setStreaming(false);
+
+  await Promise.all([loadWorkspaces(), loadModels(), loadSkills()]);
+}
+
+async function toggleTheme() {
+  const next = state.settings.theme === 'dark' ? 'light' : 'dark';
+  state.settings = await api.setSettings({ theme: next });
+  smoothThemeSwitch();
+  applyUiSettings();
+}
+
+init().catch((err) => {
+  elStatusText.textContent = 'ошибка: ' + err.message;
+  elStatusDot.className = 'dot red';
+});

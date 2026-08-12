@@ -1,0 +1,45 @@
+{
+  "name": "infinity-claude-desktop",
+  "productName": "InfinityClaude",
+  "version": "1.0.0",
+  "description": "Desktop Claude-style GUI chatting through OmniRoute free gateway",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "dist:dir": "electron-builder --win --dir"
+  },
+  "author": "InfinityClaude",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "marked": "^15.0.0"
+  },
+  "build": {
+    "appId": "com.infinityclaude.app",
+    "productName": "InfinityClaude",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "renderer/**/*",
+      "skills/**/*",
+      "build/icon.ico",
+      "build/icon.png",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    }
+  }
+}
