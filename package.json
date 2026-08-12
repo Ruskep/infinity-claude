@@ -27,7 +27,6 @@
       "preload.js",
       "src/**/*",
       "renderer/**/*",
-      "skills/**/*",
       "build/icon.ico",
       "build/icon.png",
       "package.json"
