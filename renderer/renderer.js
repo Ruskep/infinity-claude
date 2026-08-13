@@ -44,7 +44,7 @@ function escapeHtml(s) {
 
 function prettyModel(id) {
   if (!id) return '';
-  if (id === 'auto') return 'auto (роутинг)';
+  if (id === 'auto') return i18nT('autoRouting');
   let s = id;
   if (s.includes('/')) s = s.split('/').slice(1).join('/');
   s = s.replace(/claude[-_]?(sonnet|opus|haiku)?/i, (m) => m.replace(/^claude/i, 'Claude'));
@@ -134,7 +134,7 @@ function addMsgEl() {
 
 function addUserMsg(text, attachments) {
   const m = addMsgEl();
-  m.label.textContent = 'Вы';
+  m.label.textContent = i18nT('you');
   m.wrapper.classList.add('user');
   if (attachments && attachments.length) {
     const row = document.createElement('div');
@@ -188,9 +188,9 @@ function renderAssistant(m, text, opts) {
   m.wrapper.classList.toggle('streaming', live);
   if (!text || !text.trim()) {
     if (live) {
-      m.md.innerHTML = '<span class="thinking"><span class="typing"><span></span><span></span><span></span></span><span class="thinking-txt">думает…</span></span>';
+      m.md.innerHTML = '<span class="thinking"><span class="typing"><span></span><span></span><span></span></span><span class="thinking-txt">' + i18nT('thinkingDots') + '</span></span>';
     } else {
-      m.md.innerHTML = '<span class="empty-done">· действия выполнены</span>';
+      m.md.innerHTML = '<span class="empty-done">· ' + i18nT('doneThinking') + '</span>';
     }
   } else if (live) {
     // появление текста: прозрачность -> видимо. Пока стрим идёт — мерцающий курсор.
@@ -231,22 +231,14 @@ function addToolCard(wrapper, stateIm) {
 }
 
 function humanTool(t) {
-  return {
-    bash: 'Терминал',
-    read_file: 'Чтение файла',
-    write_file: 'Запись файла',
-    edit_file: 'Правка файла',
-    delete_file: 'Удаление',
-    list_dir: 'Список файлов',
-    web_search: 'Поиск в интернете',
-    web_fetch: 'Чтение страницы'
-  }[t] || t;
+  const names = i18nDict().tools || {};
+  return names[t] || t;
 }
 
 function stateSpinner(s) {
-  if (s === 'running') return 'выполняется…';
+  if (s === 'running') return i18nT('running');
   if (s === 'done') return '✓';
-  if (s === 'denied') return '⛔ отклонено';
+  if (s === 'denied') return i18nT('denied');
   return '';
 }
 
@@ -345,13 +337,13 @@ function chatTime(chat) {
   if (!t) return '';
   const diff = Date.now() - t;
   const m = Math.floor(diff / 60000);
-  if (m < 1) return 'только что';
-  if (m < 60) return m + ' мин';
+  if (m < 1) return i18nT('justNow');
+  if (m < 60) return m + i18nT('min');
   const h = Math.floor(m / 60);
-  if (h < 24) return h + ' ч';
+  if (h < 24) return h + i18nT('h');
   const d = Math.floor(h / 24);
-  if (d < 7) return d + ' д';
-  return new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  if (d < 7) return d + i18nT('d');
+  return new Date(t).toLocaleDateString(i18nLang() === 'en' ? 'en-US' : 'ru-RU', { day: 'numeric', month: 'short' });
 }
 
 function renderWorkspaces() {
@@ -363,9 +355,9 @@ function renderWorkspaces() {
     const hint = document.createElement('div');
     hint.className = 'ws-empty ws-empty-hint';
     const btn = document.createElement('button');
-    btn.textContent = 'Добавить папку проекта';
+    btn.textContent = i18nT('addFolder');
     btn.onclick = () => pickWorkspace();
-    hint.appendChild(document.createTextNode('Проектов пока нет. '));
+    hint.appendChild(document.createTextNode(i18nT('noProjects')));
     hint.appendChild(btn);
     elWsScroll.appendChild(hint);
   }
@@ -393,7 +385,7 @@ function renderWorkspaces() {
         : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>'}</span>
       <span class="ws-name" title="${escapeHtml(ws.path || '')}">${escapeHtml(ws.name)}</span>
       <span class="ws-count">${(ws.chats || []).length || ''}</span>
-      ${isNone ? '' : '<button class="ws-del" title="Удалить проект">✕</button>'}`;
+      ${isNone ? '' : '<button class="ws-del" title="' + i18nT('deleteProjectTitle') + '">✕</button>'}`;
     head.onclick = (e) => {
       if (e.target.closest('.ws-del')) return;
       if (e.target.closest('.chev')) {
@@ -406,7 +398,7 @@ function renderWorkspaces() {
       head.querySelector('.ws-del').onclick = async (e) => {
         e.stopPropagation();
         if (state.settings && state.settings.confirmDelete !== false) {
-          if (!confirm('Удалить проект «' + ws.name + '» из списка? Файлы на диске не тронутся.')) return;
+          if (!confirm(i18nT('removeProject', { name: ws.name }))) return;
         }
         await api.workspaceRemove(ws.id);
         await loadWorkspaces();
@@ -431,7 +423,7 @@ function renderWorkspaces() {
     } else if (!collapsed) {
       const e2 = document.createElement('div');
       e2.className = 'ws-empty';
-      e2.textContent = 'Нет чатов';
+      e2.textContent = i18nT('noChats');
       chatsInner.appendChild(e2);
     }
     group.appendChild(chats);
@@ -446,19 +438,19 @@ function buildChatItem(ws, chat) {
   item.innerHTML = `
     <div class="chat-main">
       <div class="chat-title">
-        <span class="chat-name">${escapeHtml(chat.title || 'Чат')}</span>
+        <span class="chat-name">${escapeHtml(chat.title || i18nT('chat'))}</span>
         ${chatTime(chat) ? `<span class="chat-time">${escapeHtml(chatTime(chat))}</span>` : ''}
       </div>
       ${chatPreview(chat) ? `<div class="chat-preview">${escapeHtml(chatPreview(chat))}</div>` : ''}
     </div>
     <div class="chat-actions">
-      <button class="chat-rename" title="Переименовать">✎</button>
-      <button class="chat-del" title="Удалить чат">✕</button>
+      <button class="chat-rename" title="${i18nT('renameTitle')}">✎</button>
+      <button class="chat-del" title="${i18nT('deleteTitle')}">✕</button>
     </div>`;
   const nameEl = item.querySelector('.chat-name');
   nameEl.ondblclick = async (e) => {
     e.stopPropagation();
-    const next = prompt('Переименовать чат:', chat.title || '');
+    const next = prompt(i18nT('renameChat'), chat.title || '');
     if (next === null) return;
     await api.workspaceRenameChat({ workspaceId: ws.id, chatId: chat.id, title: next });
     if (state.activeChatId === chat.id) {
@@ -473,7 +465,7 @@ function buildChatItem(ws, chat) {
   item.querySelector('.chat-del').onclick = async (e) => {
     e.stopPropagation();
     if (state.settings && state.settings.confirmDelete !== false) {
-      if (!confirm('Удалить чат «' + (chat.title || 'Чат') + '»?')) return;
+      if (!confirm(i18nT('removeChat', { name: (chat.title || i18nT('chat')) }))) return;
     }
     await api.workspaceDeleteChat({ workspaceId: ws.id, chatId: chat.id });
     if (state.activeChatId === chat.id) newChat();
@@ -492,7 +484,7 @@ function renderBreadcrumb() {
     elCrumb.textContent = state.activeWorkspace.name;
     elCrumb.title = state.activeWorkspace.path;
   } else {
-    elCrumb.textContent = 'без проекта';
+    elCrumb.textContent = i18nT('noProject');
     elCrumb.title = '';
   }
 }
@@ -521,19 +513,19 @@ async function activateWorkspace(id) {
     clearMessages();
     renderWorkspaces();
     persistUIState();
-    setStatus('green', 'проект: ' + ws.name);
+    setStatus('green', i18nT('project') + ': ' + ws.name);
   }
 }
 
 /* ---------- conversations ---------- */
 
 function chatTitle() {
-  if (state.settings && state.settings.autoTitle === false) return 'Чат';
+  if (state.settings && state.settings.autoTitle === false) return i18nT('chat');
   const m0 = state.messages.find((m) => m.role === 'user');
-  if (!m0) return 'Чат';
+  if (!m0) return i18nT('chat');
   const c = m0.content;
   const t = typeof c === 'string' ? c : (Array.isArray(c) && c[0] && c[0].text) || '';
-  return t.trim().slice(0, 42) || 'Чат';
+  return t.trim().slice(0, 42) || i18nT('chat');
 }
 
 function saveChat() {
@@ -568,7 +560,7 @@ function refreshChatList() {
   if (!ws.chats.length) {
     const e2 = document.createElement('div');
     e2.className = 'ws-empty';
-    e2.textContent = 'Нет чатов';
+    e2.textContent = i18nT('noChats');
     chatsInner.appendChild(e2);
     return;
   }
@@ -692,7 +684,7 @@ function renderPendingFiles() {
     chip.className = 'att-chip';
     const icon = pf.kind === 'image' ? '🖼️' : (pf.kind === 'text' ? '📄' : '📎');
     const size = pf.size > 1024 * 1024 ? (pf.size / 1024 / 1024).toFixed(1) + ' МБ' : Math.max(1, Math.round(pf.size / 1024)) + ' КБ';
-    chip.innerHTML = '<span class="att-ico">' + icon + '</span><span class="att-name">' + escapeHtml(pf.name) + '</span><span class="att-size">' + size + '</span><button class="att-x" data-i="' + idx + '" title="Убрать">×</button>';
+    chip.innerHTML = '<span class="att-ico">' + icon + '</span><span class="att-name">' + escapeHtml(pf.name) + '</span><span class="att-size">' + size + '</span><button class="att-x" data-i="' + idx + '" title="' + i18nT('removeAttach') + '">×</button>';
     elAttachments.appendChild(chip);
   });
   for (const b of elAttachments.querySelectorAll('.att-x')) {
@@ -755,7 +747,7 @@ async function send() {
   let round = 0;
 
   setStreaming(true);
-  setStatus('amber', 'Claude думает…');
+  setStatus('amber', i18nT('statusClaudeThinking'));
 
   unsubscribe = api.onAgentChunk((chunk) => {
     if (chunk.type === 'text') {
@@ -789,7 +781,7 @@ async function send() {
       const card = addToolCard(target, { tool: chunk.tool, params: chunk.params, state: chunk.allowed ? 'running' : 'denied' });
       card.dataset.callId = chunk.callId;
       state.toolCards.push(card);
-      if (chunk.allowed) setStatus('amber', 'выполняю: ' + humanTool(chunk.tool));
+      if (chunk.allowed) setStatus('amber', i18nT('statusExec', { tool: humanTool(chunk.tool) }));
     } else if (chunk.type === 'tool_result') {
       const card = state.toolCards.find((c) => c.dataset.callId === chunk.callId);
       const stateIm = {
@@ -798,7 +790,7 @@ async function send() {
         resultText: chunk.result
       };
       setToolState(card, stateIm);
-      if (!chunk.result.includes('"approved": false')) setStatus('green', 'инструмент выполнен');
+      if (!chunk.result.includes('"approved": false')) setStatus('green', i18nT('statusToolDone'));
     } else if (chunk.type === 'done') {
       if (assistantEl) finalizeAssistant(assistantEl, currentText);
       else {
@@ -809,9 +801,9 @@ async function send() {
       finalize();
       if (state.settings && state.settings.showTokens !== false && chunk.usage) {
         const u = chunk.usage;
-        setStatus('green', 'готово · ' + ((u.prompt_tokens || 0) + (u.completion_tokens || 0)) + ' ток. в ответе');
+        setStatus('green', i18nT('statusDoneTokens', { n: ((u.prompt_tokens || 0) + (u.completion_tokens || 0)) }));
       } else {
-        setStatus('green', 'готово');
+        setStatus('green', i18nT('statusDone'));
       }
     } else if (chunk.type === 'error') {
       if (assistantEl) {
@@ -820,16 +812,16 @@ async function send() {
         const a = addAssistantMsgStreamingLabel(0);
         a.md.innerHTML = '<p style="color: var(--danger)">⚠️ ' + escapeHtml(chunk.message) + '</p>';
       }
-      state.messages.push({ role: 'assistant', content: chunk.text || ('[ошибка] ' + chunk.message) });
+      state.messages.push({ role: 'assistant', content: chunk.text || (i18nT('msgErrorBadge') + chunk.message) });
       finalize();
-      setStatus('red', 'ошибка');
+      setStatus('red', i18nT('statusError'));
     } else if (chunk.type === 'aborted') {
       if (assistantEl && currentText) {
-        assistantEl.md.innerHTML = renderMarkdown(currentText) + '<p style="color: var(--text-dim); font-size: 12px">· остановлено</p>';
+        assistantEl.md.innerHTML = renderMarkdown(currentText) + '<p style="color: var(--text-dim); font-size: 12px">· ' + i18nT('stopped') + '</p>';
         state.messages.push({ role: 'assistant', content: currentText });
       }
       finalize();
-      setStatus('green', 'остановлено');
+      setStatus('green', i18nT('stopped'));
     }
   });
 
@@ -866,9 +858,9 @@ async function send() {
   } catch (err) {
     // шлюз мог упасть без событий — снимаем блокировку и сообщаем об ошибке
     if (state.streaming) {
-      state.messages.push({ role: 'assistant', content: '[ошибка запуска] ' + err.message });
+      state.messages.push({ role: 'assistant', content: i18nT('errorLaunch') + err.message });
       finalize();
-      setStatus('red', 'ошибка');
+      setStatus('red', i18nT('statusError'));
     }
     return;
   }
@@ -876,7 +868,7 @@ async function send() {
   if (!state.streaming) return;
   if (result && result.aborted && !currentText && !state.messages.some((m) => m.role === 'user' && m.content === userContent)) {
     finalize();
-    setStatus('green', 'остановлено');
+    setStatus('green', i18nT('stopped'));
   }
 }
 
@@ -922,17 +914,17 @@ function stop() {
 /* ---------- models ---------- */
 
 async function loadModels() {
-  setStatus('amber', 'загрузка моделей…');
+  setStatus('amber', i18nT('loadingModels'));
   let models = [];
   try {
     const res = await api.listModels(state.settings);
     if (res && res.error) throw new Error(res.error);
     models = res || [];
   } catch (_) {
-    setStatus('red', 'нет связи со шлюзом');
+    setStatus('red', i18nT('noGateway'));
     elModel.innerHTML = '';
     const o = document.createElement('option');
-    o.value = 'auto'; o.textContent = 'auto (шлюз недоступен)';
+    o.value = 'auto'; o.textContent = i18nT('gatewayDown');
     elModel.appendChild(o);
     return;
   }
@@ -940,7 +932,7 @@ async function loadModels() {
   const claude = models.map((m) => m.id).filter((id) => /claude/i.test(id)).sort();
 
   elModel.innerHTML = '';
-  elModel.appendChild(op('auto', 'auto · умный роутинг', (!state.settings.model || state.settings.model === 'auto')));
+  elModel.appendChild(op('auto', i18nT('smartRouting'), (!state.settings.model || state.settings.model === 'auto')));
 
   const seen = new Set();
   const prefs = ['kr/claude-sonnet-4.5', 'kr/claude-sonnet-5', 'kr/claude-opus', 'kiro/claude-sonnet-5'];
@@ -950,7 +942,7 @@ async function loadModels() {
   if (state.settings.model && Array.from(elModel.options).some((o) => o.value === state.settings.model)) {
     elModel.value = state.settings.model;
   }
-  setStatus('green', claude.length + ' моделей · шлюз OK');
+  setStatus('green', i18nT('gatewayOk', { n: claude.length }));
 }
 
 function op(value, label, selected) {
@@ -996,7 +988,7 @@ function renderSkills() {
   if (!state.skills.length) {
     const d = document.createElement('div');
     d.className = 'skill-empty';
-    d.textContent = 'Скилов нет. Нажми + чтобы создать.';
+    d.textContent = i18nT('skillsEmpty');
     elSkillsList.appendChild(d);
     return;
   }
@@ -1043,7 +1035,7 @@ async function openSkillEditor(skill) {
     $('skill-body').value = r.error ? '' : dedentBody(r.content);
     skillEditing = skill;
   }
-  $('skill-modal-title').textContent = 'Скил: ' + skill.title;
+  $('skill-modal-title').textContent = i18nT('skillModalTitle', { name: skill.title });
   $('skill-form').classList.toggle('hidden', !!skillEditing.readOnly);
   $('skill-remove').classList.toggle('hidden', !!skillEditing.readOnly || !skill.id);
   $('skill-save').classList.toggle('hidden', !!skillEditing.readOnly);
@@ -1075,7 +1067,7 @@ async function createSkill() {
   $('skill-new-desc').value = '';
   $('skill-body').value = '';
   skillEditing = { isNew: true };
-  $('skill-modal-title').textContent = 'Новый скил';
+  $('skill-modal-title').textContent = i18nT('newSkill');
   $('skill-form').classList.remove('hidden');
   $('skill-remove').classList.add('hidden');
   $('skill-modal').classList.remove('hidden');
@@ -1118,7 +1110,7 @@ async function runSkillInstall() {
   if (!cmd) return;
   const out = $('skill-install-output');
   out.classList.remove('hidden');
-  out.textContent = 'Выполняется: ' + cmd + '\n';
+  out.textContent = i18nT('runningCmd', { cmd: cmd }) + '\n';
   const btn = $('skill-install-run');
   btn.disabled = true;
   try {
@@ -1129,15 +1121,15 @@ async function runSkillInstall() {
       text = r.stdout || r.stderr || '';
       if (r.error) text += '\n' + r.error;
     } catch (_) { text = String(res?.output || ''); }
-    out.textContent = out.textContent + '--- вывод ---\n' + (text || '(пусто)') + '\n\n';
+    out.textContent = out.textContent + '--- output ---\n' + (text || i18nT('installationEmpty')) + '\n\n';
     if (res && Array.isArray(res.installed) && res.installed.length) {
-      out.textContent += 'Установлено: ' + res.installed.map((i) => i.name + (i.updated ? ' (обновлён)' : '')).join(', ') + '\n';
+      out.textContent += i18nT('installedList', { list: res.installed.map((i) => i.name + (i.updated ? i18nT('updated') : '')).join(', ') }) + '\n';
     } else {
-      out.textContent += 'Не нашлось новых SKILL.md.\n';
+      out.textContent += i18nT('noSkillsFound') + '\n';
     }
     await loadSkills();
   } catch (err) {
-    out.textContent += '\nОшибка: ' + err.message;
+    out.textContent += '\n' + i18nT('errorPrefix') + err.message;
   } finally {
     btn.disabled = false;
   }
@@ -1149,7 +1141,7 @@ let approvalResolve = null;
 
 async function setupApproval() {
   api.onApproval((payload) => {
-    $('approval-label').textContent = payload.humanized.label + ' · нужно разрешение';
+    $('approval-label').textContent = i18nT('approveNeed', { label: payload.humanized.label });
     $('approval-title').textContent = payload.humanized.title || '';
     $('approval-code').textContent = payload.humanized.code || '';
     $('approval-remember').checked = false;
@@ -1177,7 +1169,7 @@ function showPollCard(payload) {
   const poll = payload.poll || {};
   const callId = payload.callId;
   const title = poll.title || '';
-  const question = poll.question || 'Вопрос';
+  const question = poll.question || i18nT('pollQuestion');
   const options = Array.isArray(poll.options) ? poll.options : [];
   const multiple = !!poll.multiple;
   const allowCustom = poll.allowCustom !== false;
@@ -1252,7 +1244,7 @@ function showPollCard(payload) {
     const parts = [];
     if (picks.length) parts.push(picks.join(', '));
     if (custom) parts.push('✍️ ' + custom);
-    answerBox.textContent = '✓ Ты ответил: ' + (parts.join(' · ') || '—');
+    answerBox.textContent = i18nT('pollReplied', { answer: (parts.join(' · ') || '—') });
     answerBox.classList.remove('hidden');
     api.replyPoll({ callId, picks, custom });
     scrollToBottom();
@@ -1280,7 +1272,7 @@ function showPollCard(payload) {
     card.classList.add('answered');
     optsBox.querySelectorAll('input').forEach((i) => (i.disabled = true));
     if (customInput) customInput.disabled = true;
-    answerBox.textContent = '— пропущено';
+    answerBox.textContent = i18nT('pollSkipped');
     answerBox.classList.remove('hidden');
     scrollToBottom();
   });
@@ -1339,6 +1331,7 @@ function openSettings() {
     $('cfg-restore').checked = s.restoreOnStart !== false;
     $('cfg-autotitle').checked = s.autoTitle !== false;
     $('cfg-language').value = s.language || 'ru';
+    $('cfg-ui-language').value = s.uiLanguage || 'auto';
     $('cfg-publicname').value = s.publicName || 'Claude';
     $('cfg-identity').checked = s.identityOverride !== false;
     $('cfg-sysprompt').value = s.systemPrompt || '';
@@ -1354,7 +1347,7 @@ function openSettings() {
 function fillSettingsModelSelect(current) {
   const sel = $('cfg-model');
   sel.innerHTML = '';
-  sel.appendChild(op('auto', 'auto · умный роутинг', current === 'auto'));
+  sel.appendChild(op('auto', i18nT('smartRouting'), current === 'auto'));
   const claude = state.models.map((m) => m.id).filter((id) => /claude/i.test(id)).sort();
   const seen = new Set();
   const prefs = ['kr/claude-sonnet-4.5', 'kr/claude-sonnet-5', 'kr/claude-opus', 'kiro/claude-sonnet-5'];
@@ -1377,7 +1370,7 @@ function renderSettingsSkills() {
   if (!state.skills.length) {
     const d = document.createElement('div');
     d.className = 'skill-empty';
-    d.textContent = 'Скилов пока нет. Создай или установи командой.';
+    d.textContent = i18nT('skillsEmptySettings');
     listEl.appendChild(d);
     return;
   }
@@ -1421,7 +1414,7 @@ function renderMcpList() {
   if (!state.mcpServers.length) {
     const d = document.createElement('div');
     d.className = 'skill-empty';
-    d.textContent = 'Серверов пока нет. Добавь, например: npx -y @modelcontextprotocol/server-filesystem C:\\Projects или URL http://localhost:3001/mcp.';
+    d.textContent = i18nT('mcpEmpty');
     listEl.appendChild(d);
     return;
   }
@@ -1441,13 +1434,13 @@ function renderMcpList() {
     cb.onchange = () => { srv.enabled = cb.checked; renderMcpList(); };
     toggle.appendChild(cb);
     const labelSpan = document.createElement('span');
-    labelSpan.textContent = 'вкл';
+    labelSpan.textContent = i18nT('mcpEnabled');
     toggle.appendChild(labelSpan);
     head.appendChild(toggle);
 
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
-    nameInput.placeholder = 'Имя (лат., одно слово)';
+    nameInput.placeholder = i18nT('mcpNamePh');
     nameInput.value = srv.id || '';
     nameInput.spellcheck = false;
     nameInput.onchange = () => { srv.id = nameInput.value.trim().replace(/\s+/g, '_'); if (srv.id !== nameInput.value) nameInput.value = srv.id; };
@@ -1455,13 +1448,13 @@ function renderMcpList() {
 
     const badge = document.createElement('span');
     badge.className = 'mcp-item-badge' + (srv.enabled === false ? ' disabled' : '');
-    badge.textContent = /^https?:\/\//i.test((srv.url || '').trim()) ? 'HTTP' : 'команда';
+    badge.textContent = /^https?:\/\//i.test((srv.url || '').trim()) ? 'HTTP' : i18nT('modeCommand');
     head.appendChild(badge);
 
     const del = document.createElement('button');
     del.className = 'del';
     del.textContent = '✕';
-    del.title = 'Удалить сервер';
+    del.title = i18nT('deleteServerTitle');
     del.onclick = () => { state.mcpServers.splice(idx, 1); renderMcpList(); };
     head.appendChild(del);
 
@@ -1470,7 +1463,7 @@ function renderMcpList() {
     const cmd = document.createElement('textarea');
     cmd.rows = 2;
     cmd.spellcheck = false;
-    cmd.placeholder = 'Команда запуска, напр. npx -y @modelcontextprotocol/server-filesystem C:\\Projects\nили URL, напр. http://localhost:3001/mcp';
+    cmd.placeholder = i18nT('mcpCmdPh');
     if (/^https?:\/\//i.test((srv.url || '').trim())) {
       cmd.value = srv.url;
     } else {
@@ -1480,26 +1473,26 @@ function renderMcpList() {
       const v = cmd.value.trim();
       if (/^https?:\/\//i.test(v)) { srv.url = v; srv.command = ''; }
       else { srv.command = v; srv.url = ''; }
-      badge.textContent = /^https?:\/\//i.test(v) ? 'HTTP' : 'команда';
+      badge.textContent = /^https?:\/\//i.test(v) ? 'HTTP' : i18nT('modeCommand');
     };
     item.appendChild(cmd);
 
     const testBtn = document.createElement('button');
     testBtn.className = 'btn';
-    testBtn.textContent = 'Проверить';
+    testBtn.textContent = i18nT('mcpTest');
     testBtn.onclick = async () => {
       testBtn.disabled = true;
       resultEl.className = 'mcp-test-result';
-      resultEl.textContent = 'Подключаюсь…';
+      resultEl.textContent = i18nT('mcpTesting');
       const server = currentServer();
       const res = await api.mcpTest(server);
       testBtn.disabled = false;
       if (res && res.ok) {
         resultEl.className = 'mcp-test-result ok';
-        resultEl.textContent = `OK: найдено инструментов — ${res.tools}`;
+        resultEl.textContent = i18nT('mcpOk', { n: res.tools });
       } else {
         resultEl.className = 'mcp-test-result bad';
-        resultEl.textContent = 'Ошибка: ' + ((res && res.error) || 'неизвестная');
+        resultEl.textContent = i18nT('mcpBad', { e: ((res && res.error) || i18nT('unknownErr')) });
       }
     };
 
@@ -1529,7 +1522,7 @@ async function testConnection() {
   const box = $('conn-test-result');
   box.classList.remove('hidden');
   box.className = 'conn-result';
-  box.textContent = 'Проверяю…';
+  box.textContent = i18nT('checking');
   const res = await api.testConnection({
     baseUrl: $('cfg-baseurl').value.trim(),
     apiKey: $('cfg-apikey').value.trim()
@@ -1537,15 +1530,15 @@ async function testConnection() {
   box.classList.remove('hidden');
   if (res && res.ok) {
     box.className = 'conn-result ok';
-    box.textContent = `Подключение успешно: ${res.count} моделей доступно, ответ за ${res.timeMs} мс.`;
+    box.textContent = i18nT('connOk', { n: res.count, ms: res.timeMs });
   } else {
     box.className = 'conn-result fail';
-    box.textContent = 'Ошибка: ' + ((res && res.error) || 'неизвестная');
+    box.textContent = i18nT('connBad', { e: ((res && res.error) || i18nT('unknownErr')) });
   }
 }
 
 async function resetSettings() {
-  if (!confirm('Сбросить все настройки к значениям по умолчанию?')) return;
+  if (!confirm(i18nT('confirmReset'))) return;
   state.settings = await api.resetSettings();
   closeSettings();
   applyUiSettings();
@@ -1587,6 +1580,7 @@ async function saveSettings() {
     restoreOnStart: $('cfg-restore').checked,
     autoTitle: $('cfg-autotitle').checked,
     language: $('cfg-language').value,
+    uiLanguage: $('cfg-ui-language').value,
     publicName: $('cfg-publicname').value.trim() || 'Claude',
     identityOverride: $('cfg-identity').checked,
     systemPrompt: $('cfg-sysprompt').value,
@@ -1599,13 +1593,14 @@ async function saveSettings() {
     })).filter((s) => s.id && (s.command || s.url))
   };
   state.settings = await api.setSettings(patch);
+  applyUiLanguage(patch.uiLanguage);
   closeSettings();
   smoothThemeSwitch();
   applyUiSettings();
   const off = $('#agent-tip');
   if (off) off.textContent = patch.agentMode
-    ? 'Агентный режим включён: могу читать/редактировать файлы и запускать команды — спрашивая разрешение.'
-    : 'Агентный режим выключен: обычный чат без инструментов.';
+    ? i18nT('agentTipOn')
+    : i18nT('agentTipOff');
   loadModels();
 }
 
@@ -1624,6 +1619,21 @@ function applyUiSettings() {
     root.style.setProperty('--ui-radius', (s.radius != null ? s.radius : 14) + 'px');
     root.style.setProperty('--msg-max-width', (s.messageWidth || 780) + 'px');
   }
+}
+
+async function applyUiLanguage(pref) {
+  const want = pref || (state.settings && state.settings.uiLanguage) || 'auto';
+  let lang = 'ru';
+  if (want !== 'auto') {
+    lang = /^ru/i.test(want) ? 'ru' : 'en';
+  } else {
+    try {
+      const loc = await api.getLocale();
+      lang = /^(ru|uk|be|kk|ky|uz|tg|az|hy|ka|bg|bg-BG|sr)/i.test(loc) ? 'ru' : 'en';
+    } catch (_) { lang = 'ru'; }
+  }
+  i18nSet(lang);
+  i18nApplyStatic();
 }
 
 function smoothThemeSwitch() {
@@ -1663,11 +1673,11 @@ function setupSettingsTabs() {
 async function init() {
   state.settings = await api.getSettings();
   applyUiSettings();
-
+  await applyUiLanguage();
   const off = $('#agent-tip');
   if (off) off.textContent = state.settings.agentMode
-    ? 'Агентный режим включён: могу читать/редактировать файлы и запускать команды — спрашивая разрешение.'
-    : 'Агентный режим выключен: обычный чат без инструментов.';
+    ? i18nT('agentTipOn')
+    : i18nT('agentTipOff');
 
   elInput.addEventListener('input', () => { autosize(); updateSendState(); });
   elInput.addEventListener('keydown', (e) => {
@@ -1709,7 +1719,7 @@ async function init() {
   $('refresh-models-panel').addEventListener('click', loadModels);
   $('test-conn-panel').addEventListener('click', testConnection);
   $('reset-settings-panel').addEventListener('click', resetSettings);
-  $('clear-rules-panel').addEventListener('click', async () => { await api.clearRules(); setStatus('green', 'правила сброшены'); });
+  $('clear-rules-panel').addEventListener('click', async () => { await api.clearRules(); setStatus('green', i18nT('resetDone')); });
   $('settings-skill-install').addEventListener('click', openSkillInstall);
   $('settings-skill-add').addEventListener('click', createSkill);
   $('mcp-add').addEventListener('click', addMcpServer);
@@ -1719,6 +1729,8 @@ async function init() {
   setStreaming(false);
 
   await Promise.all([loadWorkspaces(), loadModels(), loadSkills()]);
+
+  setupOnboarding();
 }
 
 async function toggleTheme() {
@@ -1729,6 +1741,52 @@ async function toggleTheme() {
 }
 
 init().catch((err) => {
-  elStatusText.textContent = 'ошибка: ' + err.message;
+  elStatusText.textContent = i18nT('errorPrefix') + err.message;
   elStatusDot.className = 'dot red';
 });
+
+/* ---------- onboarding ---------- */
+
+function setupOnboarding() {
+  const root = $('#ob-welcome');
+  if (!root || state.settings.onboarded === true) return;
+  root.classList.remove('hidden');
+
+  const slides = Array.prototype.slice.call(root.querySelectorAll('.ob-slide'));
+  const showSlide = (i) => {
+    slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
+  };
+  showSlide(0);
+
+  const langCards = Array.prototype.slice.call(root.querySelectorAll('.ob-lang-card'));
+  const pickLang = (el) => {
+    langCards.forEach((c) => c.classList.remove('ob-lang-active'));
+    el.classList.add('ob-lang-active');
+  };
+  langCards.forEach((c) => c.addEventListener('click', () => pickLang(c)));
+
+  $('#ob-start').addEventListener('click', () => {
+    i18nApplyStatic(root);
+    showSlide(1);
+  });
+  $('#ob-lang-next').addEventListener('click', () => {
+    const active = langCards.find((c) => c.classList.contains('ob-lang-active'));
+    const pref = active ? active.dataset.uiLang : 'auto';
+    applyUiLanguage(pref).then(() => i18nApplyStatic());
+    showSlide(2);
+  });
+  $('#ob-feat-next').addEventListener('click', () => showSlide(3));
+  $('#ob-skill-install').addEventListener('click', () => {
+    root.classList.add('hidden');
+    openSkillInstall();
+  });
+  const finish = async () => {
+    root.classList.add('hidden');
+    try {
+      await api.setOnboarded(true);
+      state.settings = Object.assign({}, state.settings, { onboarded: true });
+    } catch (_) { /* ignore */ }
+  };
+  $('#ob-finish').addEventListener('click', finish);
+  $('#ob-enter-app').addEventListener('click', finish);
+}

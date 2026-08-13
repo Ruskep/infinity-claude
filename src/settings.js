@@ -38,7 +38,9 @@ const DEFAULTS = {
   density: 'comfortable', // 'compact' | 'comfortable' | 'cozy'
   animations: true,
   autoScroll: true,
+  // язык ответов модели + язык интерфейса
   language: 'ru', // язык ответов модели
+  uiLanguage: 'auto', // язык интерфейса: 'auto' (по системе) | 'ru' | 'en'
   radius: 14, // скругление элементов интерфейса, px
   messageWidth: 780, // макс. ширина блока сообщений, px
   codeWrap: false, // перенос длинных строк в блоках кода
@@ -76,7 +78,8 @@ const DEFAULTS = {
 
   // состояние
   lastWorkspaceId: null,
-  lastChatId: null
+  lastChatId: null,
+  onboarded: false // показывать онбординг при первом запуске
 };
 
 const SCHEMA = {

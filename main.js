@@ -297,6 +297,12 @@ ipcMain.handle('mcp:test', async (_e, server) => {
   }
 });
 
+ipcMain.handle('app:locale', () => app.getLocale());
+ipcMain.handle('app:onboarded', (_e, value) => {
+  settings.set({ onboarded: value === true });
+  return true;
+});
+
 app.on('will-quit', () => {
   try { mcp.disconnectAll(); } catch (_) { }
 });

@@ -14,6 +14,10 @@ contextBridge.exposeInMainWorld('infinity', {
   testConnection: (cfg) => ipcRenderer.invoke('settings:test', cfg),
   listModels: (cfg) => ipcRenderer.invoke('models:list', cfg),
 
+  // app / locale / onboarding
+  getLocale: () => ipcRenderer.invoke('app:locale'),
+  setOnboarded: (value) => ipcRenderer.invoke('app:onboarded', value),
+
   // workspaces
   workspaceList: () => ipcRenderer.invoke('workspace:list'),
   workspaceSelect: () => ipcRenderer.invoke('workspace:select'),

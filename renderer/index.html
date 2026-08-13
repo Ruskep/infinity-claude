@@ -18,24 +18,24 @@
       <div class="sidebar-top">
         <button id="new-chat-btn" class="new-chat-btn">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-          Новый чат
+          <span data-i18n="newChat">Новый чат</span>
         </button>
         <button id="add-ws-btn" class="add-ws-btn" title="Добавить папку проекта">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M2.5 12h19M12 2.5v19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
       </div>
       <div class="sidebar-section" id="sidebar-section">
-        <div class="sidebar-section-label">Чаты</div>
+        <div class="sidebar-section-label" data-i18n="chats">Чаты</div>
         <div class="ws-scroll" id="ws-scroll"></div>
       </div>
 
       <div class="sidebar-bottom">
         <div class="skills-wrap">
           <div class="skills-head">
-            <span>Скилы</span>
+            <span data-i18n="skills">Скилы</span>
             <div class="skills-head-btns">
-              <button id="skill-install-btn" class="mini-btn" title="Установить скил командой">↓</button>
-              <button id="skill-add-btn" class="mini-btn" title="Создать скил">+</button>
+              <button id="skill-install-btn" class="mini-btn" data-i18n-title="installSkill">↓</button>
+              <button id="skill-add-btn" class="mini-btn" data-i18n-title="createSkill">+</button>
             </div>
           </div>
           <div id="skills-list" class="skills-list"></div>
@@ -43,11 +43,11 @@
         <div class="side-actions">
           <button id="settings-btn" class="side-action">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3 1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8 1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            Настройки
+            <span data-i18n="settings">Настройки</span>
           </button>
           <button id="theme-btn" class="side-action">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-            Тема
+            <span data-i18n="theme">Тема</span>
           </button>
         </div>
       </div>
@@ -57,11 +57,11 @@
     <main id="main">
       <header id="chat-header">
         <div class="ws-breadcrumb" id="ws-breadcrumb">
-          <span class="crumb-folder" id="crumb-folder">без проекта</span>
+          <span class="crumb-folder" id="crumb-folder" data-i18n="noProject">без проекта</span>
           <span class="crumb-sep">/</span>
           <select id="model-select"></select>
         </div>
-        <div class="status"><span id="status-dot" class="dot gray"></span><span id="status-text">подключение…</span></div>
+        <div class="status"><span id="status-dot" class="dot gray"></span><span id="status-text" data-i18n="connecting">подключение…</span></div>
       </header>
 
       <div id="messages"><div class="empty-state" id="empty-state">
@@ -69,36 +69,36 @@
           <img src="icon.png" alt="InfinityClaude" />
         </div>
         <h1>InfinityClaude</h1>
-        <p>Агент для проектов через OmniRoute. Добавь папку проекта — я помогу с кодом.</p>
+        <p data-i18n="emptySub">Агент для проектов через OmniRoute. Добавь папку проекта — я помогу с кодом.</p>
         <div class="empty-actions">
-          <button id="empty-add-ws" class="primary-btn">Добавить папку проекта</button>
-          <button class="ghost-btn" id="empty-new-chat">Просто поболтать</button>
+          <button id="empty-add-ws" class="primary-btn" data-i18n="addProjectBtn">Добавить папку проекта</button>
+          <button class="ghost-btn" id="empty-new-chat" data-i18n="justChat">Просто поболтать</button>
         </div>
       </div></div>
 
       <div id="composer">
         <div id="input-box">
           <div class="attachments hidden" id="attachments"></div>
-          <textarea id="input" rows="1" placeholder="Спроси или попроси что-нибудь сделать в проекте…"></textarea>
+          <textarea id="input" rows="1" data-i18n-placeholder="placeholder" placeholder="Спроси или попроси что-нибудь сделать в проекте…"></textarea>
           <div class="composer-footer">
             <div class="composer-left">
-              <button id="attach-btn" class="attach-btn" title="Прикрепить файлы">
+              <button id="attach-btn" class="attach-btn" data-i18n-title="addFolder">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
               <input type="file" id="file-input" multiple hidden />
-              <span id="hint" class="hint">Enter — отправить · Shift+Enter — новая строка</span>
+              <span id="hint" class="hint" data-i18n="hint">Enter — отправить · Shift+Enter — новая строка</span>
             </div>
             <div class="composer-btns">
-              <button id="stop-btn" class="stop-btn hidden" title="Остановить">
+              <button id="stop-btn" class="stop-btn hidden" data-i18n-title="stopped">
                 <svg width="11" height="11" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>
               </button>
-              <button id="send-btn" title="Отправить" disabled>
+              <button id="send-btn" data-i18n-title="?send" disabled>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
               </button>
             </div>
           </div>
         </div>
-        <div class="agent-tip" id="agent-tip">Агентный режим включён: могу читать/редактировать файлы и запускать команды — спрашивая разрешение.</div>
+        <div class="agent-tip" id="agent-tip" data-i18n="agentTipOn">Агентный режим включён: могу читать/редактировать файлы и запускать команды — спрашивая разрешение.</div>
       </div>
     </main>
   </div>
@@ -110,17 +110,17 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20.3 19.4 13 4.2c-1-1.7-3.4-1.7-4.4 0L1.2 19.4a2.2 2.2 0 0 0 2 3.3h17.1a2.2 2.2 0 0 0 2-3.3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
       </div>
       <div class="approval-body">
-        <div class="approval-label" id="approval-label">Разрешить</div>
+        <div class="approval-label" id="approval-label" data-i18n="approve">Разрешить</div>
         <div class="approval-title" id="approval-title"></div>
         <pre class="approval-code" id="approval-code"></pre>
         <div class="approval-opts">
-          <label class="chk"><input type="checkbox" id="approval-remember" /> Запомнить на эту сессию</label>
-          <label class="chk"><input type="checkbox" id="approval-global" /> Для всех путей</label>
+          <label class="chk"><input type="checkbox" id="approval-remember" /> <span data-i18n="rememberSession">Запомнить на эту сессию</span></label>
+          <label class="chk"><input type="checkbox" id="approval-global" /> <span data-i18n="forAllPaths">Для всех путей</span></label>
         </div>
       </div>
       <div class="approval-actions">
-        <button id="approval-deny" class="btn danger">Отклонить</button>
-        <button id="approval-allow" class="btn primary">Разрешить</button>
+        <button id="approval-deny" class="btn danger" data-i18n="deny">Отклонить</button>
+        <button id="approval-allow" class="btn primary" data-i18n="allow">Разрешить</button>
       </div>
     </div>
   </div>
@@ -129,239 +129,247 @@
   <div id="settings-modal" class="modal hidden">
     <div class="modal-content settings">
       <div class="modal-header">
-        <h2>Настройки</h2>
+        <h2 data-i18n="settingsTitle">Настройки</h2>
         <button id="modal-close" class="close-btn">✕</button>
       </div>
       <div class="settings-body">
         <nav class="settings-nav" id="settings-nav">
-          <button class="stab active" data-tab="connection">Подключение</button>
-          <button class="stab" data-tab="model">Модель и генерация</button>
-          <button class="stab" data-tab="agent">Агент и разрешения</button>
-          <button class="stab" data-tab="mcp">MCP-серверы</button>
-          <button class="stab" data-tab="ui">Интерфейс</button>
-          <button class="stab" data-tab="skills">Скилы</button>
-          <button class="stab" data-tab="system">Система</button>
+          <button class="stab active" data-tab="connection" data-i18n="tabConnection">Подключение</button>
+          <button class="stab" data-tab="model" data-i18n="tabModel">Модель и генерация</button>
+          <button class="stab" data-tab="agent" data-i18n="tabAgent">Агент и разрешения</button>
+          <button class="stab" data-tab="mcp" data-i18n="tabMcp">MCP-серверы</button>
+          <button class="stab" data-tab="ui" data-i18n="tabUi">Интерфейс</button>
+          <button class="stab" data-tab="skills" data-i18n="tabSkills">Скилы</button>
+          <button class="stab" data-tab="system" data-i18n="tabSystem">Система</button>
         </nav>
         <div class="settings-panels">
 
           <div class="spanel active" id="spanel-connection">
-            <h3>Подключение</h3>
-            <label>Base URL шлюза</label>
+            <h3 data-i18n="tabConnection">Подключение</h3>
+            <label data-i18n="lblBaseUrl">Base URL шлюза</label>
             <input id="cfg-baseurl" type="text" spellcheck="false" />
-            <label>API-ключ OmniRoute</label>
+            <label data-i18n="lblApiKey">API-ключ OmniRoute</label>
             <input id="cfg-apikey" type="password" spellcheck="false" />
             <div class="row2">
               <div>
-                <label>Таймаут тишины (сек)</label>
+                <label data-i18n="lblIdleTimeout">Таймаут тишины (сек)</label>
                 <input id="cfg-idle" type="range" min="5" max="120" step="5" />
                 <span id="cfg-idle-val" class="val"></span>
               </div>
               <div>
-                <label>Таймаут запроса (сек)</label>
+                <label data-i18n="lblReqTimeout">Таймаут запроса (сек)</label>
                 <input id="cfg-req-timeout" type="number" min="15" max="600" step="5" />
               </div>
             </div>
-            <p class="section-note">Чтобы применить новый шлюз/ключ, сохрани и нажми «Обновить модели» ниже.</p>
+            <p class="section-note" data-i18n="connNote">Чтобы применить новый шлюз/ключ, сохрани и нажми «Обновить модели» ниже.</p>
             <div class="settings-actions">
-              <button id="refresh-models-panel" class="btn">Обновить модели</button>
-              <button id="test-conn-panel" class="btn">Проверить подключение</button>
+              <button id="refresh-models-panel" class="btn" data-i18n="refreshModels">Обновить модели</button>
+              <button id="test-conn-panel" class="btn" data-i18n="testConnection">Проверить подключение</button>
             </div>
             <div id="conn-test-result" class="conn-result hidden"></div>
           </div>
 
           <div class="spanel" id="spanel-model">
-            <h3>Модель и генерация</h3>
-            <label>Модель</label>
-            <select id="cfg-model"><option value="auto">auto · умный роутинг</option></select>
+            <h3 data-i18n="tabModel">Модель и генерация</h3>
+            <label data-i18n="lblModel">Модель</label>
+            <select id="cfg-model"><option value="auto"></option></select>
             <div class="row2">
               <div>
-                <label>Температура <span class="val-hint">креативность/точность</span></label>
+                <label data-i18n="lblTemperature">Температура</label> <span class="val-hint" data-i18n="hintCreativity">креативность/точность</span>
                 <input id="cfg-temperature" type="range" min="0" max="2" step="0.1" />
                 <span id="cfg-temperature-val" class="val"></span>
               </div>
               <div>
-                <label>Top-P <span class="val-hint">разнообразие слов</span></label>
+                <label data-i18n="lblTopP">Top-P</label> <span class="val-hint" data-i18n="hintVariety">разнообразие слов</span>
                 <input id="cfg-topp" type="range" min="0" max="1" step="0.05" />
                 <span id="cfg-topp-val" class="val"></span>
               </div>
             </div>
             <div class="row2">
               <div>
-                <label>Frequency penalty <span class="val-hint">повторение слов</span></label>
+                <label data-i18n="lblFreqPenalty">Frequency penalty</label> <span class="val-hint" data-i18n="hintWordRepeat">повторение слов</span>
                 <input id="cfg-frequency" type="range" min="-2" max="2" step="0.1" />
                 <span id="cfg-frequency-val" class="val"></span>
               </div>
               <div>
-                <label>Presence penalty <span class="val-hint">повторение тем</span></label>
+                <label data-i18n="lblPresencePenalty">Presence penalty</label> <span class="val-hint" data-i18n="hintTopicRepeat">повторение тем</span>
                 <input id="cfg-presence" type="range" min="-2" max="2" step="0.1" />
                 <span id="cfg-presence-val" class="val"></span>
               </div>
             </div>
             <div class="row2">
               <div>
-                <label>Max токенов ответа</label>
+                <label data-i18n="lblMaxTokens">Max токенов ответа</label>
                 <input id="cfg-max-tokens" type="number" min="256" max="128000" step="256" />
               </div>
               <div>
-                <label>Seed <span class="val-hint">воспроизводимость (пусто = случайно)</span></label>
+                <label data-i18n="lblSeed">Seed</label> <span class="val-hint" data-i18n="hintSeed">воспроизводимость (пусто = случайно)</span>
                 <input id="cfg-seed" type="number" min="0" max="4294967295" step="1" placeholder="—" />
               </div>
             </div>
             <div class="row2">
               <div>
-                <label>Бюджет истории (тыс. символов)</label>
+                <label data-i18n="lblContextBudget">Бюджет истории (тыс. символов)</label>
                 <input id="cfg-context" type="number" min="4" max="500" step="1" />
-                <p class="field-hint">Старые сообщения за пределом бюджета обрезаются перед отправкой.</p>
+                <p class="field-hint" data-i18n="hintContextBudget">Старые сообщения за пределом бюджета обрезаются перед отправкой.</p>
               </div>
               <div></div>
             </div>
           </div>
 
           <div class="spanel" id="spanel-agent">
-            <h3>Агент и разрешения</h3>
-            <label class="chk"><input type="checkbox" id="cfg-agent" /> Агентный режим (инструменты)</label>
-            <label>Авто-одобрение</label>
+            <h3 data-i18n="tabAgent">Агент и разрешения</h3>
+            <label class="chk"><input type="checkbox" id="cfg-agent" /> <span data-i18n="agentMode">Агентный режим (инструменты)</span></label>
+            <label data-i18n="lblAutoApprove">Авто-одобрение</label>
             <select id="cfg-approve">
-              <option value="ask">Спрашивать перед каждым действием</option>
-              <option value="read">Разрешать чтение, спрашивать изменения</option>
-              <option value="all">Разрешать всё без вопросов</option>
+              <option value="ask" data-i18n="autoApprove.ask"></option>
+              <option value="read" data-i18n="autoApprove.read"></option>
+              <option value="all" data-i18n="autoApprove.all"></option>
             </select>
-            <label class="chk"><input type="checkbox" id="cfg-webtools" /> Веб-доступ (поиск и чтение страниц)</label>
-            <label class="chk"><input type="checkbox" id="cfg-loopguard" /> Защита от зацикливания модели</label>
+            <label class="chk"><input type="checkbox" id="cfg-webtools" /> <span data-i18n="webAccess">Веб-доступ (поиск и чтение страниц)</span></label>
+            <label class="chk"><input type="checkbox" id="cfg-loopguard" /> <span data-i18n="loopGuard">Защита от зацикливания модели</span></label>
             <div class="row2">
               <div>
-                <label>Max раундов инструментов за ответ</label>
+                <label data-i18n="lblMaxRounds">Max раундов инструментов за ответ</label>
                 <input id="cfg-max-rounds" type="number" min="1" max="200" step="1" />
               </div>
               <div>
-                <label>Повторов при пустом ответе</label>
+                <label data-i18n="lblEmptyRetries">Повторов при пустом ответе</label>
                 <input id="cfg-empty-retries" type="number" min="0" max="10" step="1" />
               </div>
             </div>
-            <p class="section-note">Изменения файлов и команды требуют подтверждения, пока не выбран «разрешать всё».</p>
+            <p class="section-note" data-i18n="agentNote">Изменения файлов и команды требуют подтверждения, пока не выбран «разрешать всё».</p>
             <div class="settings-actions">
-              <button id="clear-rules-panel" class="btn">Сбросить правила</button>
+              <button id="clear-rules-panel" class="btn" data-i18n="clearRules">Сбросить правила</button>
             </div>
           </div>
 
           <div class="spanel" id="spanel-mcp">
-            <h3>MCP-серверы</h3>
-            <p class="section-note">MCP — способ подключить к агенту внешние инструменты (файловую систему, базы данных, браузер, свои сервисы). Сервер задаётся командой запуска (npx / node) или URL. Инструменты серверов подключатся к модели автоматически.</p>
+            <h3 data-i18n="mcpServers">MCP-серверы</h3>
+            <p class="section-note" data-i18n="mcpIntro">MCP — способ подключить к агенту внешние инструменты (файловую систему, базы данных, браузер, свои сервисы). Сервер задаётся командой запуска (npx / node) или URL. Инструменты серверов подключатся к модели автоматически.</p>
             <div id="mcp-list" class="mcp-list"></div>
             <div class="settings-actions">
-              <button id="mcp-add" class="btn">Добавить сервер</button>
+              <button id="mcp-add" class="btn" data-i18n="mcpAdd">Добавить сервер</button>
             </div>
           </div>
 
           <div class="spanel" id="spanel-ui">
-            <h3>Интерфейс</h3>
+            <h3 data-i18n="tabUi">Интерфейс</h3>
             <div class="row2">
               <div>
-                <label>Акцентный цвет</label>
-                <select id="cfg-accent">
-                  <option value="terracotta">Терракота (по умолчанию)</option>
-                  <option value="ocean">Океан</option>
-                  <option value="forest">Лес</option>
-                  <option value="violet">Фиолет</option>
-                  <option value="gold">Золото</option>
-                  <option value="mono">Монохром</option>
+                <label data-i18n="lblUiLang">Язык интерфейса</label>
+                <select id="cfg-ui-language">
+                  <option value="auto" data-i18n="uiLangAuto"></option>
+                  <option value="ru" data-i18n="langRu"></option>
+                  <option value="en" data-i18n="langEn"></option>
                 </select>
               </div>
               <div>
-                <label>Тема</label>
+                <label data-i18n="lblAccent">Акцентный цвет</label>
+                <select id="cfg-accent">
+                  <option value="terracotta" data-i18n="accentTerracotta"></option>
+                  <option value="ocean" data-i18n="accentOcean"></option>
+                  <option value="forest" data-i18n="accentForest"></option>
+                  <option value="violet" data-i18n="accentViolet"></option>
+                  <option value="gold" data-i18n="accentGold"></option>
+                  <option value="mono" data-i18n="accentMono"></option>
+                </select>
+              </div>
+              <div>
+                <label data-i18n="lblTheme">Тема</label>
                 <select id="cfg-theme">
-                  <option value="dark">Тёмная</option>
-                  <option value="light">Светлая</option>
+                  <option value="dark" data-i18n="themeDark"></option>
+                  <option value="light" data-i18n="themeLight"></option>
                 </select>
               </div>
             </div>
             <div class="row2">
               <div>
-                <label>Размер текста</label>
+                <label data-i18n="lblFontSize">Размер текста</label>
                 <input id="cfg-font-size" type="range" min="11" max="20" step="1" />
                 <span id="cfg-font-size-val" class="val"></span>
               </div>
               <div>
-                <label>Плотность сообщений</label>
+                <label data-i18n="lblDensity">Плотность сообщений</label>
                 <select id="cfg-density">
-                  <option value="compact">Компактно</option>
-                  <option value="comfortable">Удобно</option>
-                  <option value="cozy">Просторно</option>
+                  <option value="compact" data-i18n="densityCompact"></option>
+                  <option value="comfortable" data-i18n="densityComfortable"></option>
+                  <option value="cozy" data-i18n="densityCozy"></option>
                 </select>
               </div>
             </div>
-            <label class="chk"><input type="checkbox" id="cfg-animations" /> Плавные анимации</label>
-            <label class="chk"><input type="checkbox" id="cfg-autoscroll" /> Автопрокрутка к новым сообщениям</label>
+            <label class="chk"><input type="checkbox" id="cfg-animations" /> <span data-i18n="smoothAnimations">Плавные анимации</span></label>
+            <label class="chk"><input type="checkbox" id="cfg-autoscroll" /> <span data-i18n="autoScroll">Автопрокрутка к новым сообщениям</span></label>
             <div class="row2">
               <div>
-                <label>Скругление интерфейса</label>
+                <label data-i18n="lblRadius">Скругление интерфейса</label>
                 <input id="cfg-radius" type="range" min="0" max="24" step="1" />
                 <span id="cfg-radius-val" class="val"></span>
               </div>
               <div>
-                <label>Ширина сообщений</label>
+                <label data-i18n="lblMsgWidth">Ширина сообщений</label>
                 <input id="cfg-msgwidth" type="range" min="560" max="1000" step="10" />
                 <span id="cfg-msgwidth-val" class="val"></span>
               </div>
             </div>
-            <label class="chk"><input type="checkbox" id="cfg-codewrap" /> Перенос длинных строк в коде</label>
-            <label class="chk"><input type="checkbox" id="cfg-showtokens" /> Показывать расход токенов после ответа</label>
-            <label class="chk"><input type="checkbox" id="cfg-enter" /> Enter отправляет (снять = Ctrl+Enter)</label>
-            <label class="chk"><input type="checkbox" id="cfg-confirmdel" /> Спрашивать подтверждение перед удалением</label>
+            <label class="chk"><input type="checkbox" id="cfg-codewrap" /> <span data-i18n="codeWrapOn">Перенос длинных строк в коде</span></label>
+            <label class="chk"><input type="checkbox" id="cfg-showtokens" /> <span data-i18n="showTokensOn">Показывать расход токенов после ответа</span></label>
+            <label class="chk"><input type="checkbox" id="cfg-enter" /> <span data-i18n="useEnter">Enter отправляет (снять = Ctrl+Enter)</span></label>
+            <label class="chk"><input type="checkbox" id="cfg-confirmdel" /> <span data-i18n="confirmDelete">Спрашивать подтверждение перед удалением</span></label>
           </div>
 
           <div class="spanel" id="spanel-skills">
-            <h3>Скилы</h3>
+            <h3 data-i18n="skills">Скилы</h3>
             <div class="settings-actions">
-              <button id="settings-skill-install" class="btn">Установить скил командой</button>
-              <button id="settings-skill-add" class="btn">Создать скил</button>
+              <button id="settings-skill-install" class="btn" data-i18n="installSkill">Установить скил командой</button>
+              <button id="settings-skill-add" class="btn" data-i18n="createSkill">Создать скил</button>
             </div>
             <div id="settings-skills-list" class="settings-skills-list"></div>
-            <p class="section-note">Включённые скилы отправляются модели перед каждым запросом и применяются, когда подходит их описание.</p>
+            <p class="section-note" data-i18n="skillToggleHint">Включённые скилы отправляются модели перед каждым запросом и применяются, когда подходит их описание.</p>
           </div>
 
           <div class="spanel" id="spanel-system">
-            <h3>Система</h3>
+            <h3 data-i18n="tabSystem">Система</h3>
             <div class="row2">
               <div>
-                <label>Язык ответов</label>
+                <label data-i18n="lblLang">Язык ответов</label>
                 <select id="cfg-language">
-                  <option value="ru">Русский</option>
-                  <option value="en">English</option>
-                  <option value="kk">Қазақша</option>
-                  <option value="uk">Українська</option>
-                  <option value="auto">По ситуации (определяет сам)</option>
+                  <option value="auto" data-i18n="langSystem"></option>
+                  <option value="ru" data-i18n="langRu"></option>
+                  <option value="en" data-i18n="langEn"></option>
+                  <option value="kk" data-i18n="langKk"></option>
+                  <option value="uk" data-i18n="langUk"></option>
                 </select>
               </div>
               <div>
-                <label>Имя ассистента</label>
+                <label data-i18n="lblAssistantName">Имя ассистента</label>
                 <input id="cfg-publicname" type="text" spellcheck="false" />
               </div>
             </div>
-            <label class="chk"><input type="checkbox" id="cfg-identity" /> Настаивать на личности Claude (identity override)</label>
+            <label class="chk"><input type="checkbox" id="cfg-identity" /> <span data-i18n="identityOverride">Настаивать на личности Claude (identity override)</span></label>
             <div class="row2">
               <div>
-                <label>Текстовое вложение (КБ)</label>
+                <label data-i18n="lblTextAttach">Текстовое вложение (КБ)</label>
                 <input id="cfg-maxtext" type="number" min="10" max="2000" step="10" />
               </div>
               <div>
                 <label>&nbsp;</label>
-                <label class="chk"><input type="checkbox" id="cfg-restore" /> Восстанавливать последний чат</label>
+                <label class="chk"><input type="checkbox" id="cfg-restore" /> <span data-i18n="restoreLastChat">Восстанавливать последний чат</span></label>
               </div>
             </div>
-            <label class="chk"><input type="checkbox" id="cfg-autotitle" /> Авто-заголовок чата из первого сообщения</label>
-            <label>System prompt</label>
+            <label class="chk"><input type="checkbox" id="cfg-autotitle" /> <span data-i18n="autoTitle">Авто-заголовок чата из первого сообщения</span></label>
+            <label data-i18n="lblSystemPrompt">System prompt</label>
             <textarea id="cfg-sysprompt" rows="9" spellcheck="false"></textarea>
-            <p class="section-note">Инструкция для модели. Здесь задаётся личность Claude; Kiro-провайдер может перебивать её — используй модель auto (роутинг).</p>
+            <p class="section-note" data-i18n="sysPromptNote">Инструкция для модели. Здесь задаётся личность Claude; Kiro-провайдер может перебивать её — используй модель auto (роутинг).</p>
             <div class="settings-actions">
-              <button id="reset-settings-panel" class="btn danger">Сбросить все настройки</button>
+              <button id="reset-settings-panel" class="btn danger" data-i18n="confirmResetBtn">Сбросить все настройки</button>
             </div>
           </div>
 
         </div>
       </div>
       <div class="modal-footer">
-        <button id="save-settings" class="btn primary">Сохранить</button>
+        <button id="save-settings" class="btn primary" data-i18n="saveBtn">Сохранить</button>
       </div>
     </div>
   </div>
@@ -375,17 +383,17 @@
       </div>
       <div class="modal-body">
         <div id="skill-form">
-          <label>Имя</label>
-          <input id="skill-new-name" type="text" placeholder="напр. code-reviewer" />
-          <label>Описание</label>
-          <input id="skill-new-desc" type="text" placeholder="Для чего нужен скил" />
+          <label data-i18n="skillName">Имя</label>
+          <input id="skill-new-name" type="text" data-i18n-placeholder="namePh" placeholder="напр. code-reviewer" />
+          <label data-i18n="skillDescription">Описание</label>
+          <input id="skill-new-desc" type="text" data-i18n-placeholder="skillDescriptionPh" placeholder="Для чего нужен скил" />
         </div>
-        <label>SKILL.md</label>
+        <label data-i18n="skillBody">SKILL.md</label>
         <textarea id="skill-body" rows="14" spellcheck="false"></textarea>
       </div>
       <div class="modal-footer">
-        <button id="skill-remove" class="btn danger hidden">Удалить</button>
-        <button id="skill-save" class="btn primary">Сохранить</button>
+        <button id="skill-remove" class="btn danger hidden" data-i18n="delete">Удалить</button>
+        <button id="skill-save" class="btn primary" data-i18n="save">Сохранить</button>
       </div>
     </div>
   </div>
@@ -394,14 +402,14 @@
   <div id="skill-install-modal" class="modal hidden">
     <div class="modal-content skill-editor">
       <div class="modal-header">
-        <h2>Установить скил</h2>
+        <h2 data-i18n="installSkillTitle">Установить скил</h2>
         <button id="skill-install-close" class="close-btn">✕</button>
       </div>
       <div class="modal-body">
-        <label>Команда установки (npx / git clone)</label>
+        <label data-i18n="installCmd">Команда установки (npx / git clone)</label>
         <input id="skill-install-cmd" type="text" spellcheck="false"
-          placeholder="npx install-skill@latest owner/repo/skill-name" />
-        <div class="modal-hint">Команда выполняется в отдельной папке, после чего найденные папки со SKILL.md копируются в твои скилы. Примеры:</div>
+          data-i18n-placeholder="installCmdPh" placeholder="npx install-skill@latest owner/repo/skill-name" />
+        <div class="modal-hint" data-i18n="installHint">Команда выполняется в отдельной папке, после чего найденные папки со SKILL.md копируются в твои скилы. Примеры:</div>
         <ul class="skill-hints">
           <li><code>npx install-skill@latest anthropics/skills/memory</code></li>
           <li><code>git clone https://github.com/{user}/{repo}.git</code></li>
@@ -409,11 +417,66 @@
         <pre id="skill-install-output" class="approval-code hidden"></pre>
       </div>
       <div class="modal-footer">
-        <button id="skill-install-run" class="btn primary">Установить</button>
+        <button id="skill-install-run" class="btn primary" data-i18n="install">Установить</button>
       </div>
     </div>
   </div>
 
+  <!-- ======= ONBOARDING ======= -->
+  <div id="ob-welcome" class="onboarding hidden">
+    <div class="ob-orb ob-orb-a"></div>
+    <div class="ob-orb ob-orb-b"></div>
+    <div class="onboarding-content">
+      <div class="ob-slide ob-slide-0">
+        <div class="ob-logo">
+          <img src="icon.png" alt="InfinityClaude" draggable="false" />
+        </div>
+        <h1 class="ob-title">InfinityClaude</h1>
+        <p class="ob-sub" data-i18n="obTagline">Твой личный агент с файлами, терминалом и веб-инструментами</p>
+        <button id="ob-start" class="btn primary ob-cta" data-i18n="obStart">Начать</button>
+      </div>
+
+      <div class="ob-slide ob-slide-1">
+        <h2 data-i18n="obLangTitle">Выбери язык интерфейса</h2>
+        <p class="ob-sub" data-i18n="obLangHint">Его можно изменить позже в настройках</p>
+        <div class="ob-lang-cards">
+          <button class="ob-lang-card ob-lang-active" data-ui-lang="auto"><strong>Авто</strong><span data-i18n="uiLangAuto">Как в системе (авто)</span></button>
+          <button class="ob-lang-card" data-ui-lang="ru"><strong>Русский</strong><span>Русский язык интерфейса</span></button>
+          <button class="ob-lang-card" data-ui-lang="en"><strong>English</strong><span>English interface</span></button>
+        </div>
+        <button id="ob-lang-next" class="btn primary ob-cta" data-i18n="obNext">Далее</button>
+      </div>
+
+      <div class="ob-slide ob-slide-2">
+        <h2 data-i18n="obFeaturesTitle">Что умеет твой агент</h2>
+        <div class="ob-feats">
+          <div class="ob-feat"><span class="ob-feat-ic">📄</span><div><strong data-i18n="obFeatFiles">Файлы</strong><span data-i18n="obFeatFilesD">читает и редактирует файлы проекта</span></div></div>
+          <div class="ob-feat"><span class="ob-feat-ic">⌨️</span><div><strong data-i18n="obFeatTerm">Терминал</strong><span data-i18n="obFeatTermD">запускает команды и проверяет результат</span></div></div>
+          <div class="ob-feat"><span class="ob-feat-ic">🌐</span><div><strong data-i18n="obFeatWeb">Веб</strong><span data-i18n="obFeatWebD">ищет информацию в интернете</span></div></div>
+          <div class="ob-feat"><span class="ob-feat-ic">🔌</span><div><strong data-i18n="obFeatMcp">MCP</strong><span data-i18n="obFeatMcpD">подключай внешние инструменты</span></div></div>
+          <div class="ob-feat"><span class="ob-feat-ic">🎯</span><div><strong data-i18n="obFeatSkills">Скилы</strong><span data-i18n="obFeatSkillsD">готовые навыки для частых задач</span></div></div>
+        </div>
+        <button id="ob-feat-next" class="btn primary ob-cta" data-i18n="obNext">Далее</button>
+      </div>
+
+      <div class="ob-slide ob-slide-3">
+        <h2 data-i18n="obSkillsTitle">Установи пару скилов?</h2>
+        <p class="ob-sub" data-i18n="obSkillsHint">Скилы — готовые инструкции для агента. Можешь установить сейчас или пропустить.</p>
+        <div class="ob-actions">
+          <button id="ob-skill-install" class="btn primary" data-i18n="obInstallSkills">Установить скилы</button>
+          <button id="ob-finish" class="btn" data-i18n="obSkip">Пропустить</button>
+        </div>
+      </div>
+
+      <div class="ob-slide ob-slide-4">
+        <h2 data-i18n="obDoneTitle">Всё готово!</h2>
+        <p class="ob-sub" data-i18n="obDoneText">Напиши свой первый запрос. Если что — я всегда в чате слева внизу.</p>
+        <button id="ob-enter-app" class="btn primary ob-cta" data-i18n="obEnter">Войти в приложение</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="i18n.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
