@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="build/icon.png" width="120" height="120" alt="InfinityClaude logo" />
+  <img src="build/icon.png" width="128" height="128" alt="InfinityClaude logo" />
 </p>
 
 <h1 align="center">InfinityClaude</h1>
 
 <p align="center">
-  <strong>A desktop AI agent for working on projects</strong><br/>
-  Reads and edits files, runs commands, searches the web, and plugs into external tools via MCP — all in one window.
+  <strong>A desktop AI agent for working on real projects.</strong><br/>
+  Reads and edits files, runs terminal commands, searches the web, connects external tools via MCP and works through a free OmniRoute gateway — all in one window.
 </p>
 
 <p align="center">
@@ -14,32 +14,62 @@
   <img src="https://img.shields.io/badge/Electron-33-47848F" alt="Electron 33" />
   <img src="https://img.shields.io/badge/Platform-Windows_10%2B-0078D6" alt="Windows" />
   <img src="https://img.shields.io/badge/Node.js-18%2B-339933" alt="Node.js 18+" />
+  <img src="https://img.shields.io/badge/free-OmniRoute-8B5CF6" alt="Uses OmniRoute gateway" />
 </p>
 
 ---
 
+## Table of contents
+
+1. [What is InfinityClaude](#what-is-infinityclaude)
+2. [Features](#features)
+3. [Requirements](#requirements)
+4. [Installation](#installation)
+5. [Quick start](#quick-start)
+6. [OmniRoute: installing and setting up the gateway](#omniroute-installing-and-setting-up-the-gateway)
+7. [Working with the agent](#working-with-the-agent)
+8. [MCP servers](#mcp-servers)
+9. [Skills](#skills)
+10. [Interface and themes](#interface-and-themes)
+11. [Configuration](#configuration)
+12. [Troubleshooting](#troubleshooting)
+13. [For developers](#for-developers)
+14. [License](#license)
+
+---
+
+## What is InfinityClaude
+
+InfinityClaude is a desktop chat UI built around **agents with real tools**. Instead of just replying, the model can inspect your project, edit files, execute commands, search the web, and hand work back to you with questions when it is stuck — then keep going until the job is done.
+
+It talks to models through **OmniRoute**, a free gateway that aggregates many OpenAI-compatible providers behind a single local API — no paid API keys required.
+
+> **Heads-up:** image attachments are shown as labeled attachments and are **not** sent to the model for vision analysis. Text files are inserted directly into the message.
+
 ## Features
 
-- **Agent mode** — the model gets real tools: file operations, terminal, web search, and interactive polls to complete tasks inside your project (with permission prompts).
-- **Workspaces** — each project folder keeps its own chat history.
+- **Tool-using agent** — file read/write/edit/delete, directory listings, terminal, web search and page reading, and interactive polls (with per-path permission prompts).
+- **Workspaces** — each project folder keeps its own chat history in the sidebar.
 - **MCP servers** — attach external tools via `npx ...` commands or HTTP URLs: filesystems, databases, a browser, or your own services.
-- **Skills** — personal instructions (`SKILL.md`) the model applies when the situation matches.
-- **Smart routing** — pick `auto` and let the gateway choose a working provider, or select a specific model manually.
+- **Skills** — personal instructions (`SKILL.md`) the model applies automatically when the situation matches their description.
+- **Smart routing** — pick `auto` and let the gateway choose a working provider, or select a specific model by hand.
 - **Web access** — DuckDuckGo search and page reading right from the chat.
-- **Flexible settings** — themes, accent colors, animations, Enter behavior, context budgets and more.
-- **English & Russian UI** — defaults to Russian, with a selectable response language.
+- **Agent loop protection** — max tool rounds and retries on empty replies keep runaway sessions in check.
+- **Flexible UI** — light/dark themes, accent colors (terracotta, ocean, forest, violet, gold, mono), density, font size, rounding, message width.
+- **Bilingual interface** — English and Russian UI that follows your system language by default, with a separate selectable response language for the model.
+- **Onboarding cutscene** — a short animated first-run flow that boots the "agent", lets you pick the interface and reply language, and shows a live demo of how it works.
 
 ## Requirements
 
 - Windows 10/11, 64-bit
 - [Node.js](https://nodejs.org) 18+ (only needed to run from source)
-- A running **OmniRoute** gateway with an available API key (default: `http://localhost:20128`)
+- A running **OmniRoute** gateway with an authorized provider (default: `http://localhost:20128`)
 
 ## Installation
 
 ### Installer build
 
-Download `InfinityClaude Setup 1.0.0.exe` from the [Releases](../../releases) page and run it.
+Download `InfinityClaude Setup 1.0.0.exe` from the [Releases](../../releases) page and run it. No extra runtime is required.
 
 ### From source
 
@@ -51,35 +81,31 @@ npm start
 Build the installer:
 
 ```bash
-npm run dist       # creates release/InfinityClaude Setup *.exe
+npm run dist        # creates release/InfinityClaude Setup *.exe
+npm run dist:dir    # just the unpacked app in release/win-unpacked
 ```
 
 ## Quick start
 
-1. Launch the app.
+1. Launch the app. On the first run a short onboarding walks you through the language setup and a live example.
 2. Open **Settings → Connection**, verify the gateway Base URL and enter your OmniRoute API key. Click **"Test connection"**.
 3. Click **"Add project folder"** in the sidebar and choose your folder.
 4. Ask something like: *"Look at the project structure and tell me what's in it."*
 
-> The first time you modify a file or run a command, the app will ask for permission. You can enable auto-approval in the settings.
+> The first time the agent modifies a file or runs a command, the app asks for permission. You can relax this in **Settings → Agent & approvals**.
 
 ## OmniRoute: installing and setting up the gateway
 
 InfinityClaude does not talk to paid APIs directly — it goes through **OmniRoute**, a gateway that aggregates many providers into a single OpenAI-compatible API. Without a running OmniRoute, the chat won't respond.
 
-### Install OmniRoute
+### Install and start OmniRoute
 
 ```bash
 npm install -g omniroute
-```
-
-Start the gateway:
-
-```bash
 omniroute start
 ```
 
-It listens on `http://localhost:20128` by default — that's exactly what InfinityClaude uses out of the box.
+It listens on `http://localhost:20128` by default — exactly what InfinityClaude uses out of the box.
 
 ### Connect a model (OAuth account)
 
@@ -95,15 +121,15 @@ Once an account is authorized, keep `auto` in InfinityClaude's **Settings → Co
 
 In InfinityClaude: **Settings → Connection → "Test connection"**. Success = the model list responds in a few dozen milliseconds.
 
-## Working with the AI: best practices
+## Working with the agent
 
 This is an **agent** with tools. It can inspect and change files, run commands, search the web, ask you via polls, and use connected MCP servers on its own.
 
 **How to ask better:**
 
 - Be specific: *"Look at the files in src/ and find where network errors are handled"* beats *"fix bugs"*.
-- One task at a time. If you have several, list them — the agent will break them down.
-- State a concrete result (format, style, constraints) up front.
+- Split large tasks into a numbered list — the agent will work through them one by one.
+- State the expected result, format and constraints up front.
 - After major changes, ask for a short summary of what was modified.
 
 **What the agent does on its own:**
@@ -122,12 +148,6 @@ This is an **agent** with tools. It can inspect and change files, run commands, 
 | `Allow reads` | Reads and listings run without prompts; changes still confirm |
 | `Allow everything` | All actions run without prompts (only for trusted projects) |
 
-**Troubleshooting:**
-
-- Model loops or replies off-topic → stop it, clarify the task, or switch models.
-- Gateway silent → check that OmniRoute is running and the account isn't "Token expired".
-- Model doesn't see tools → make sure Agent mode is enabled.
-
 ## MCP servers
 
 In **Settings → MCP servers** add a server:
@@ -141,21 +161,35 @@ Each enabled server connects automatically and its tools are exposed to the mode
 
 Skills are folders with a `SKILL.md` (frontmatter metadata: `name`, `description`). Create one in **Settings → Skills**, enable it, and the model will apply it whenever its description matches. Custom skills live in the app's data folder (`%APPDATA%\InfinityClaude\skills\`).
 
+## Interface and themes
+
+The UI language follows your system by default and can be pinned explicitly (**Settings → System → Interface language**). The model's **response language** is a separate setting, so the interface can be English while the agent answers in Russian (and vice versa).
+
+Visual options: light/dark theme, accent color, density, font size, window rounding, message width, smooth animations, auto-scroll, and code wrapping.
+
 ## Configuration
 
 Settings are stored in the app data folder (`%APPDATA%\InfinityClaude\config.json`). Everything is manageable from the UI, but the file can be edited by hand too.
+
+## Troubleshooting
+
+- **Model loops or replies off-topic** — stop it, clarify the task, or switch models.
+- **Gateway silent** — check that OmniRoute is running and the account isn't "Token expired".
+- **"Token expired"** — reauthorize the provider in the OmniRoute web UI, then refresh models.
+- **Model doesn't see tools** — make sure Agent mode is enabled in Settings → Agent.
+- **SmartScreen warning on Windows** — the installer is unsigned; click "More info → Run anyway".
 
 ## For developers
 
 ```
 main.js        # main process: window, tools, agent loop
 preload.js     # IPC bridge for the renderer
-renderer/      # UI (HTML/CSS/JS)
+renderer/      # UI (HTML/CSS/JS) + i18n dictionaries
 src/           # modules: settings, gateway, workspace, fsx, shell, mcp, skills
 build/         # icons and .ico generation
 ```
 
-Architecture: the renderer talks to the main process over IPC; the agent loop cycles through *model → tools → result* rounds until the task is done.
+Architecture: the renderer talks to the main process over IPC; the agent loop cycles through *model → tools → result* rounds until the task is done. All tool execution (bash, files, web) happens in the main process; the renderer only streams and displays results.
 
 ## License
 

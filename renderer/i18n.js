@@ -115,6 +115,15 @@ var I18N_DATA = {
     'obLangTitle': 'Выбери язык интерфейса',
     'obLangHint': 'Его можно изменить позже в настройках',
     'obNext': 'Далее',
+    'obAiTitle': 'Настрой ИИ',
+    'obAiHint': 'Выбери язык интерфейса и язык ответов агента',
+    'obModelLang': 'Язык ответов агента',
+    'obDemoTitle': 'Вот как я работаю',
+    'obDemoUser': 'Исправь баг в настройках',
+    'obDemoThink': 'Думаю',
+    'obDemoRead': '📖 читаю файл настроек',
+    'obDemoEdit': '✏️ исправляю ошибку',
+    'obDemoDone': '✅ Готово, ошибка исправлена',
     'obFeaturesTitle': 'Что умеет твой агент',
     'obFeatFiles': 'Файлы',
     'obFeatFilesD': 'читает и редактирует файлы проекта',
@@ -133,6 +142,12 @@ var I18N_DATA = {
     'obDoneTitle': 'Всё готово!',
     'obDoneText': 'Напиши свой первый запрос. Если что — я всегда в чате слева внизу.',
     'obEnter': 'Войти в приложение',
+    'bootKernel': 'Запускаю ядро',
+    'bootFs': 'Подключаю файловую систему',
+    'bootTools': 'Загружаю инструменты',
+    'bootWeb': 'Настраиваю веб-доступ',
+    'bootAgent': 'Активирую агента',
+    'bootReady': 'Готово',
     'confirmReset': 'Сбросить все настройки к значениям по умолчанию?',
     'confirmResetBtn': 'Сбросить все настройки',
     'resetDone': 'Настройки сброшены',
@@ -336,6 +351,15 @@ var I18N_DATA = {
     'obLangTitle': 'Choose the interface language',
     'obLangHint': 'You can change it later in settings',
     'obNext': 'Next',
+    'obAiTitle': 'Set up the AI',
+    'obAiHint': 'Choose the interface language and the agent reply language',
+    'obModelLang': 'Agent reply language',
+    'obDemoTitle': 'Here is how I work',
+    'obDemoUser': 'Fix a bug in the settings',
+    'obDemoThink': 'Thinking',
+    'obDemoRead': '📖 reading the settings file',
+    'obDemoEdit': '✏️ fixing the bug',
+    'obDemoDone': '✅ Done, the bug is fixed',
     'obFeaturesTitle': 'What your agent can do',
     'obFeatFiles': 'Files',
     'obFeatFilesD': 'reads and edits project files',
@@ -354,6 +378,12 @@ var I18N_DATA = {
     'obDoneTitle': 'All set!',
     'obDoneText': 'Write your first message. If you need help — I am always in the chat bottom-left.',
     'obEnter': 'Enter the app',
+    'bootKernel': 'Booting the kernel',
+    'bootFs': 'Mounting the file system',
+    'bootTools': 'Loading tools',
+    'bootWeb': 'Setting up web access',
+    'bootAgent': 'Activating the agent',
+    'bootReady': 'Ready',
     'confirmReset': 'Reset all settings to defaults?',
     'confirmResetBtn': 'Reset all settings',
     'resetDone': 'Settings reset',
@@ -466,6 +496,16 @@ function i18nT(key, vars) {
   return str;
 }
 
+function i18nTFor(lang, key, vars) {
+  var dict = I18N_DATA[lang] || I18N_DATA.ru;
+  var str = key.split('.').reduce(function (o, k) { return o ? o[k] : undefined; }, dict);
+  if (typeof str !== 'string') return i18nT(key, vars);
+  if (vars) {
+    for (var k in vars) str = str.split('{' + k + '}').join(String(vars[k]));
+  }
+  return str;
+}
+
 function i18nSet(lang) { I18N_LANG = lang || 'ru'; }
 function i18nLang() { return I18N_LANG; }
 function i18nDict() { return I18N_DATA[I18N_LANG] || I18N_DATA.ru; }
@@ -489,4 +529,24 @@ function i18nApplyStatic(root) {
     if (tk && tk.charAt(0) !== '?') tt[k].setAttribute('title', i18nT(tk));
   }
   if (document.documentElement) document.documentElement.setAttribute('lang', I18N_LANG);
+}
+
+function i18nApplyStaticFor(lang, root) {
+  var scope = root || document;
+  var nodes = scope.querySelectorAll('[data-i18n]');
+  for (var i = 0; i < nodes.length; i++) {
+    var key = nodes[i].getAttribute('data-i18n');
+    if (!key || key.charAt(0) === '?') continue;
+    nodes[i].textContent = i18nTFor(lang, key);
+  }
+  var ph = scope.querySelectorAll('[data-i18n-placeholder]');
+  for (var j = 0; j < ph.length; j++) {
+    var pk = ph[j].getAttribute('data-i18n-placeholder');
+    if (pk && pk.charAt(0) !== '?') ph[j].setAttribute('placeholder', i18nTFor(lang, pk));
+  }
+  var tt = scope.querySelectorAll('[data-i18n-title]');
+  for (var k = 0; k < tt.length; k++) {
+    var tk = tt[k].getAttribute('data-i18n-title');
+    if (tk && tk.charAt(0) !== '?') tt[k].setAttribute('title', i18nTFor(lang, tk));
+  }
 }

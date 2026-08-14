@@ -381,7 +381,7 @@ function renderWorkspaces() {
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </span>
       <span class="folder-ic">${isNone
-        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 19h16M4 19V5a1 1 0 0 1 1-1h"   stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
         : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>'}</span>
       <span class="ws-name" title="${escapeHtml(ws.path || '')}">${escapeHtml(ws.name)}</span>
       <span class="ws-count">${(ws.chats || []).length || ''}</span>
@@ -1049,7 +1049,7 @@ function dedentBody(content) {
 
 async function saveSkill() {
   if (!skillEditing) return;
-  const body = $('#skill-body').value.trim();
+  const body = $('skill-body').value.trim();
   if (skillEditing.readOnly) {
     await api.updateSkillBody({ id: skillEditing.id, body: body });
   } else {
@@ -1199,8 +1199,8 @@ function showPollCard(payload) {
       <label class="poll-opt poll-custom">
         <input type="${multiple ? 'checkbox' : 'radio'}" name="${id}" value="__custom__">
         <span class="poll-box"></span>
-        <span class="poll-opt-txt">Свой вариант:</span>
-        <input type="text" class="poll-custom-input" placeholder="напиши свой…">
+        <span class="poll-opt-txt">${i18nT('pollCustom')}</span>
+        <input type="text" class="poll-custom-input" placeholder="${i18nT('pollCustomPh')}">
       </label>`;
   }
 
@@ -1210,8 +1210,8 @@ function showPollCard(payload) {
       <div class="poll-q">${escapeHtml(question)}</div>
       <div class="poll-opts">${optionsHtml}</div>
       <div class="poll-actions">
-        <button class="poll-send" disabled>Ответить</button>
-        <button class="poll-skip">Пропустить</button>
+        <button class="poll-send" disabled>${i18nT('pollAnswer')}</button>
+        <button class="poll-skip">${i18nT('pollSkip')}</button>
       </div>
       <div class="poll-answer hidden"></div>
     </div>`;
@@ -1597,7 +1597,7 @@ async function saveSettings() {
   closeSettings();
   smoothThemeSwitch();
   applyUiSettings();
-  const off = $('#agent-tip');
+  const off = $('agent-tip');
   if (off) off.textContent = patch.agentMode
     ? i18nT('agentTipOn')
     : i18nT('agentTipOff');
@@ -1612,7 +1612,7 @@ function applyUiSettings() {
   document.body.dataset.density = s.density || 'comfortable';
   document.body.dataset.anim = s.animations === false ? 'off' : 'on';
   document.body.dataset.codewrap = s.codeWrap === true ? 'on' : 'off';
-  const appEl = $('#app');
+  const appEl = $('app');
   if (appEl) {
     appEl.style.zoom = (Number(s.fontSize) || 14) / 14;
     const root = document.documentElement;
@@ -1674,7 +1674,8 @@ async function init() {
   state.settings = await api.getSettings();
   applyUiSettings();
   await applyUiLanguage();
-  const off = $('#agent-tip');
+  setupOnboarding();
+  const off = $('agent-tip');
   if (off) off.textContent = state.settings.agentMode
     ? i18nT('agentTipOn')
     : i18nT('agentTipOff');
@@ -1694,7 +1695,7 @@ async function init() {
   });
   if (elAttach) elAttach.addEventListener('click', () => elFileInput && elFileInput.click());
   if (elFileInput) elFileInput.addEventListener('change', () => { addPendingFiles(Array.from(elFileInput.files || [])); elFileInput.value = ''; });
-  const dropZone = $('#composer');
+  const dropZone = $('composer');
   if (dropZone) {
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
@@ -1729,8 +1730,6 @@ async function init() {
   setStreaming(false);
 
   await Promise.all([loadWorkspaces(), loadModels(), loadSkills()]);
-
-  setupOnboarding();
 }
 
 async function toggleTheme() {
@@ -1748,45 +1747,117 @@ init().catch((err) => {
 /* ---------- onboarding ---------- */
 
 function setupOnboarding() {
-  const root = $('#ob-welcome');
+  const root = $('ob-welcome');
   if (!root || state.settings.onboarded === true) return;
   root.classList.remove('hidden');
 
   const slides = Array.prototype.slice.call(root.querySelectorAll('.ob-slide'));
   const showSlide = (i) => {
     slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
+    if (i === 2) {
+      i18nApplyStaticFor(modelLang, $('ob-demo-slide'));
+      runDemo();
+    }
   };
   showSlide(0);
+  runBoot();
 
-  const langCards = Array.prototype.slice.call(root.querySelectorAll('.ob-lang-card'));
-  const pickLang = (el) => {
-    langCards.forEach((c) => c.classList.remove('ob-lang-active'));
-    el.classList.add('ob-lang-active');
+  let uiLang = state.settings.uiLanguage || 'auto';
+  let modelLang = state.settings.language || 'ru';
+
+  const pick = (group, cls, datasetKey, val) => {
+    group.forEach((c) => c.classList.toggle('ob-card-active', c.dataset[datasetKey] === val));
   };
-  langCards.forEach((c) => c.addEventListener('click', () => pickLang(c)));
+  const uiCards = Array.prototype.slice.call(root.querySelectorAll('.ob-lang-card'));
+  const modelCards = Array.prototype.slice.call(root.querySelectorAll('.ob-model-card'));
+  uiCards.forEach((c) => c.addEventListener('click', () => {
+    uiLang = c.dataset.uiLang;
+    pick(uiCards, 'ob-card-active', 'uiLang', uiLang);
+  }));
+  modelCards.forEach((c) => c.addEventListener('click', () => {
+    modelLang = c.dataset.modelLang;
+    pick(modelCards, 'ob-card-active', 'modelLang', modelLang);
+    i18nApplyStaticFor(modelLang, $('ob-demo-slide'));
+  }));
 
-  $('#ob-start').addEventListener('click', () => {
+  $('ob-start').addEventListener('click', () => {
     i18nApplyStatic(root);
     showSlide(1);
   });
-  $('#ob-lang-next').addEventListener('click', () => {
-    const active = langCards.find((c) => c.classList.contains('ob-lang-active'));
-    const pref = active ? active.dataset.uiLang : 'auto';
-    applyUiLanguage(pref).then(() => i18nApplyStatic());
+  $('ob-ai-next').addEventListener('click', () => {
+    applyUiLanguage(uiLang).then(() => i18nApplyStatic());
+    api.setSettings({ uiLanguage: uiLang, language: modelLang }).catch(() => {});
+    state.settings = Object.assign({}, state.settings, { uiLanguage: uiLang, language: modelLang });
     showSlide(2);
   });
-  $('#ob-feat-next').addEventListener('click', () => showSlide(3));
-  $('#ob-skill-install').addEventListener('click', () => {
-    root.classList.add('hidden');
-    openSkillInstall();
+  $('ob-demo-next').addEventListener('click', () => showSlide(3));
+  $('ob-feat-next').addEventListener('click', () => showSlide(4));
+  $('ob-skill-install').addEventListener('click', () => {
+    exitOnboarding(() => openSkillInstall());
   });
   const finish = async () => {
-    root.classList.add('hidden');
-    try {
-      await api.setOnboarded(true);
-      state.settings = Object.assign({}, state.settings, { onboarded: true });
-    } catch (_) { /* ignore */ }
+    exitOnboarding(async () => {
+      try {
+        await api.setOnboarded(true);
+        state.settings = Object.assign({}, state.settings, { onboarded: true });
+      } catch (_) { /* ignore */ }
+    });
   };
-  $('#ob-finish').addEventListener('click', finish);
-  $('#ob-enter-app').addEventListener('click', finish);
+  $('ob-finish').addEventListener('click', finish);
+  $('ob-enter-app').addEventListener('click', finish);
+}
+
+function exitOnboarding(after) {
+  const root = $('ob-welcome');
+  if (!root) { if (after) after(); return; }
+  root.classList.add('ob-exit');
+  setTimeout(() => {
+    root.classList.add('hidden');
+    root.classList.remove('ob-exit');
+    if (after) after();
+  }, 480);
+}
+
+function runBoot() {
+  const boot = $('ob-boot');
+  const hero = $('ob-hero');
+  const fill = $('ob-boot-fill');
+  const pct = $('ob-boot-pct');
+  const lines = Array.prototype.slice.call(boot.querySelectorAll('.ob-boot-line'));
+  const stepMs = 620;
+  const total = lines.length;
+  let idx = 0;
+  const step = () => {
+    if (idx > 0) lines[idx - 1].classList.remove('ob-active');
+    if (idx > 0) lines[idx - 1].classList.add('ob-done');
+    if (idx < total) {
+      lines[idx].classList.add('ob-active');
+      fill.style.width = Math.round(((idx + 1) / (total + 1)) * 100) + '%';
+      pct.textContent = Math.round(((idx + 1) / (total + 1)) * 100) + '%';
+      idx++;
+      setTimeout(step, stepMs);
+    } else {
+      fill.style.width = '100%';
+      pct.textContent = '100%';
+      setTimeout(() => {
+        boot.classList.add('ob-boot-hide');
+        hero.classList.remove('hidden');
+        hero.classList.add('show');
+      }, 350);
+    }
+  };
+  setTimeout(step, 400);
+}
+
+function runDemo() {
+  const tools = Array.prototype.slice.call(document.querySelectorAll('.ob-demo-tool'));
+  const ans = document.querySelector('.ob-demo-ans');
+  tools.forEach((t) => t.classList.remove('ob-in'));
+  if (ans) ans.classList.remove('ob-in');
+  const timers = [];
+  tools.forEach((t, i) => {
+    timers.push(setTimeout(() => t.classList.add('ob-in'), 1400 + i * 1100));
+  });
+  timers.push(setTimeout(() => ans && ans.classList.add('ob-in'), 1400 + tools.length * 1100 + 400));
+  document.addEventListener('obDemoAbort', () => timers.forEach(clearTimeout), { once: true });
 }

@@ -426,28 +426,81 @@
   <div id="ob-welcome" class="onboarding hidden">
     <div class="ob-orb ob-orb-a"></div>
     <div class="ob-orb ob-orb-b"></div>
+    <div class="ob-orb ob-orb-c"></div>
+    <div class="ob-scrim"></div>
     <div class="onboarding-content">
+
       <div class="ob-slide ob-slide-0">
-        <div class="ob-logo">
-          <img src="icon.png" alt="InfinityClaude" draggable="false" />
+        <div id="ob-boot" class="ob-boot">
+          <div class="ob-boot-logo">
+            <div class="ob-boot-rings"><i></i><i></i><i></i></div>
+            <img src="icon.png" alt="InfinityClaude" draggable="false" />
+          </div>
+          <div class="ob-boot-lines">
+            <div class="ob-boot-line"><span class="ob-boot-prompt">❯</span><span class="ob-boot-txt" data-i18n="bootKernel">Запускаю ядро</span><span class="ob-boot-dot"></span></div>
+            <div class="ob-boot-line"><span class="ob-boot-prompt">❯</span><span class="ob-boot-txt" data-i18n="bootFs">Подключаю файловую систему</span><span class="ob-boot-dot"></span></div>
+            <div class="ob-boot-line"><span class="ob-boot-prompt">❯</span><span class="ob-boot-txt" data-i18n="bootTools">Загружаю инструменты</span><span class="ob-boot-dot"></span></div>
+            <div class="ob-boot-line"><span class="ob-boot-prompt">❯</span><span class="ob-boot-txt" data-i18n="bootWeb">Настраиваю веб-доступ</span><span class="ob-boot-dot"></span></div>
+            <div class="ob-boot-line"><span class="ob-boot-prompt">❯</span><span class="ob-boot-txt" data-i18n="bootAgent">Активирую агента</span><span class="ob-boot-dot"></span></div>
+          </div>
+          <div class="ob-boot-bar"><div id="ob-boot-fill" class="ob-boot-fill"></div></div>
+          <div class="ob-boot-pct" id="ob-boot-pct">0%</div>
         </div>
-        <h1 class="ob-title">InfinityClaude</h1>
-        <p class="ob-sub" data-i18n="obTagline">Твой личный агент с файлами, терминалом и веб-инструментами</p>
-        <button id="ob-start" class="btn primary ob-cta" data-i18n="obStart">Начать</button>
+
+        <div id="ob-hero" class="ob-hero hidden">
+          <div class="ob-logo">
+            <img src="icon.png" alt="InfinityClaude" draggable="false" />
+          </div>
+          <h1 class="ob-title"><span class="ob-name">Infinity</span><span class="ob-name ob-name-accent">Claude</span></h1>
+          <p class="ob-sub" data-i18n="obTagline">Твой личный агент с файлами, терминалом и веб-инструментами</p>
+          <button id="ob-start" class="btn primary ob-cta" data-i18n="obStart">Начать</button>
+        </div>
       </div>
 
       <div class="ob-slide ob-slide-1">
-        <h2 data-i18n="obLangTitle">Выбери язык интерфейса</h2>
-        <p class="ob-sub" data-i18n="obLangHint">Его можно изменить позже в настройках</p>
-        <div class="ob-lang-cards">
-          <button class="ob-lang-card ob-lang-active" data-ui-lang="auto"><strong>Авто</strong><span data-i18n="uiLangAuto">Как в системе (авто)</span></button>
-          <button class="ob-lang-card" data-ui-lang="ru"><strong>Русский</strong><span>Русский язык интерфейса</span></button>
-          <button class="ob-lang-card" data-ui-lang="en"><strong>English</strong><span>English interface</span></button>
+        <h2 data-i18n="obAiTitle">Настрой ИИ</h2>
+        <p class="ob-sub" data-i18n="obAiHint">Выбери язык интерфейса и язык ответов агента</p>
+        <div class="ob-settings">
+          <div class="ob-group">
+            <label data-i18n="lblUiLang">Язык интерфейса</label>
+            <div class="ob-cards">
+              <button class="ob-lang-card ob-card-active" data-ui-lang="auto"><strong data-i18n="uiLangAuto">Как в системе</strong></button>
+              <button class="ob-lang-card" data-ui-lang="ru"><strong>Русский</strong></button>
+              <button class="ob-lang-card" data-ui-lang="en"><strong>English</strong></button>
+            </div>
+          </div>
+          <div class="ob-group">
+            <label data-i18n="obModelLang">Язык ответов агента</label>
+            <div class="ob-cards ob-cards-row">
+              <button class="ob-model-card ob-card-active" data-model-lang="ru"><strong>Русский</strong></button>
+              <button class="ob-model-card" data-model-lang="en"><strong>English</strong></button>
+            </div>
+          </div>
         </div>
-        <button id="ob-lang-next" class="btn primary ob-cta" data-i18n="obNext">Далее</button>
+        <button id="ob-ai-next" class="btn primary ob-cta" data-i18n="obNext">Далее</button>
       </div>
 
-      <div class="ob-slide ob-slide-2">
+      <div class="ob-slide ob-slide-2" id="ob-demo-slide">
+        <h2 data-i18n="obDemoTitle">Вот как я работаю</h2>
+        <div class="ob-demo">
+          <div class="ob-demo-row ob-demo-user">
+            <span class="ob-demo-ava">🧑</span>
+            <div class="ob-demo-msg" data-i18n="obDemoUser">Исправь баг в настройках</div>
+          </div>
+          <div class="ob-demo-row ob-demo-agent">
+            <span class="ob-demo-ava">🤖</span>
+            <div class="ob-demo-msg">
+              <span class="ob-demo-think"><span data-i18n="obDemoThink">Думаю</span><span class="ob-dots"></span></span>
+              <div class="ob-demo-tool"><span data-i18n="obDemoRead">📖 читаю файл настроек</span></div>
+              <div class="ob-demo-tool"><span data-i18n="obDemoEdit">✏️ исправляю ошибку</span></div>
+              <div class="ob-demo-ans" data-i18n="obDemoDone">✅ Готово, ошибка исправлена</div>
+            </div>
+          </div>
+        </div>
+        <button id="ob-demo-next" class="btn primary ob-cta" data-i18n="obNext">Далее</button>
+      </div>
+
+      <div class="ob-slide ob-slide-3">
         <h2 data-i18n="obFeaturesTitle">Что умеет твой агент</h2>
         <div class="ob-feats">
           <div class="ob-feat"><span class="ob-feat-ic">📄</span><div><strong data-i18n="obFeatFiles">Файлы</strong><span data-i18n="obFeatFilesD">читает и редактирует файлы проекта</span></div></div>
@@ -459,7 +512,7 @@
         <button id="ob-feat-next" class="btn primary ob-cta" data-i18n="obNext">Далее</button>
       </div>
 
-      <div class="ob-slide ob-slide-3">
+      <div class="ob-slide ob-slide-4">
         <h2 data-i18n="obSkillsTitle">Установи пару скилов?</h2>
         <p class="ob-sub" data-i18n="obSkillsHint">Скилы — готовые инструкции для агента. Можешь установить сейчас или пропустить.</p>
         <div class="ob-actions">
@@ -468,7 +521,8 @@
         </div>
       </div>
 
-      <div class="ob-slide ob-slide-4">
+      <div class="ob-slide ob-slide-5">
+        <div class="ob-done-ic">✨</div>
         <h2 data-i18n="obDoneTitle">Всё готово!</h2>
         <p class="ob-sub" data-i18n="obDoneText">Напиши свой первый запрос. Если что — я всегда в чате слева внизу.</p>
         <button id="ob-enter-app" class="btn primary ob-cta" data-i18n="obEnter">Войти в приложение</button>
