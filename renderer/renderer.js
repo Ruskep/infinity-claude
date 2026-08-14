@@ -1332,6 +1332,7 @@ function openSettings() {
     $('cfg-autotitle').checked = s.autoTitle !== false;
     $('cfg-language').value = s.language || 'ru';
     $('cfg-ui-language').value = s.uiLanguage || 'auto';
+    $('cfg-autoupdate').checked = s.autoUpdate !== false;
     $('cfg-publicname').value = s.publicName || 'Claude';
     $('cfg-identity').checked = s.identityOverride !== false;
     $('cfg-sysprompt').value = s.systemPrompt || '';
@@ -1581,6 +1582,7 @@ async function saveSettings() {
     autoTitle: $('cfg-autotitle').checked,
     language: $('cfg-language').value,
     uiLanguage: $('cfg-ui-language').value,
+    autoUpdate: $('cfg-autoupdate').checked,
     publicName: $('cfg-publicname').value.trim() || 'Claude',
     identityOverride: $('cfg-identity').checked,
     systemPrompt: $('cfg-sysprompt').value,
@@ -1727,6 +1729,7 @@ async function init() {
 
   setupApproval();
   setupPoll();
+  setupUpdates();
   setStreaming(false);
 
   await Promise.all([loadWorkspaces(), loadModels(), loadSkills()]);
@@ -1737,6 +1740,71 @@ async function toggleTheme() {
   state.settings = await api.setSettings({ theme: next });
   smoothThemeSwitch();
   applyUiSettings();
+}
+
+/* ---------- updates ---------- */
+
+function setupUpdates() {
+  const banner = $('upd-banner');
+  const statusEl = $('upd-status');
+  const progressEl = $('upd-progress');
+  const progressFill = $('upd-progress-fill');
+
+  const applyState = (st) => {
+    const status = (st && st.status) || 'idle';
+    const installBtn = $('upd-install-btn');
+    const checkBtn = $('upd-check-btn');
+
+    if (statusEl) {
+      const map = {
+        idle: 'updIdle',
+        checking: 'updChecking',
+        available: 'updAvailable',
+        uptodate: 'updUpToDate',
+        downloading: 'updDownloading',
+        downloaded: 'updDownloaded',
+        error: 'updError'
+      };
+      statusEl.textContent = i18nT(map[status] || 'updIdle');
+      if (status === 'available' || status === 'downloaded') {
+        statusEl.textContent = statusEl.textContent.replace('{v}', (st && st.version) || '');
+      }
+      if (status === 'error') {
+        statusEl.textContent = (st && st.message) ? i18nT('updError') + ': ' + st.message : i18nT('updError');
+      }
+    }
+    if (progressEl) {
+      progressEl.classList.toggle('hidden', status !== 'downloading');
+      if (progressFill) progressFill.style.width = ((st && st.progress) || 0) + '%';
+    }
+    if (installBtn) installBtn.classList.toggle('hidden', !(status === 'downloaded' || status === 'available'));
+    if (checkBtn) checkBtn.disabled = status === 'checking' || status === 'downloading';
+
+    if (banner) {
+      const show = status === 'available' || status === 'downloaded';
+      banner.classList.toggle('hidden', !show);
+      const sub = $('upd-banner-sub');
+      if (sub && st && st.version) {
+        sub.setAttribute('data-i18n', 'updBannerSubV');
+        sub.textContent = i18nT('updBannerSubV').replace('{v}', st.version);
+      }
+    }
+  };
+
+  api.getUpdateState().then(applyState).catch(() => {});
+  const off = api.onUpdateState(applyState);
+  if (off) window.__updateOff = off;
+
+  const checkBtn = $('upd-check-btn');
+  if (checkBtn) checkBtn.addEventListener('click', () => api.checkUpdates());
+  const installBtn = $('upd-install-btn');
+  if (installBtn) installBtn.addEventListener('click', () => api.downloadUpdate());
+  const bannerBtn = $('upd-banner-btn');
+  if (bannerBtn) bannerBtn.addEventListener('click', () => api.downloadUpdate());
+  const bannerClose = $('upd-banner-close');
+  if (bannerClose) bannerClose.addEventListener('click', () => {
+    banner.classList.add('hidden');
+  });
 }
 
 init().catch((err) => {

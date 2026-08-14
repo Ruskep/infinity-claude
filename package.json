@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "electron-updater": "^6.8.9",
     "marked": "^15.0.0"
   },
   "build": {
@@ -34,6 +35,13 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Ruskep",
+        "repo": "infinity-claude"
+      }
+    ],
     "win": {
       "target": [
         "nsis"

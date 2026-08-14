@@ -18,6 +18,12 @@ contextBridge.exposeInMainWorld('infinity', {
   getLocale: () => ipcRenderer.invoke('app:locale'),
   setOnboarded: (value) => ipcRenderer.invoke('app:onboarded', value),
 
+  // updates
+  checkUpdates: () => ipcRenderer.invoke('update:check'),
+  downloadUpdate: () => ipcRenderer.invoke('update:download'),
+  getUpdateState: () => ipcRenderer.invoke('update:getState'),
+  onUpdateState: (cb) => on('update:state', cb),
+
   // workspaces
   workspaceList: () => ipcRenderer.invoke('workspace:list'),
   workspaceSelect: () => ipcRenderer.invoke('workspace:select'),

@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, Menu, dialog, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { autoUpdater } = require('electron-updater');
 
 const settings = require('./src/settings');
 const gateway = require('./src/gateway');
@@ -172,6 +173,57 @@ let mainWindow = null;
 let activeController = null;
 let activeWorkspaceId = null;
 
+/* ---------- updates ---------- */
+
+let updateState = { status: 'idle', version: null, progress: 0, downloading: false };
+
+function sendUpdateUpdate() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update:state', updateState);
+  }
+}
+
+function broadcastUpdateStatus(status, extra) {
+  updateState = Object.assign({}, updateState, { status }, extra || {});
+  sendUpdateUpdate();
+}
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.setFeedURL({ provider: 'github', owner: 'Ruskep', repo: 'infinity-claude' });
+
+  autoUpdater.on('checking-for-update', () => broadcastUpdateStatus('checking'));
+  autoUpdater.on('update-available', (info) => broadcastUpdateStatus('available', { version: info.version }));
+  autoUpdater.on('update-not-available', () => broadcastUpdateStatus('uptodate'));
+  autoUpdater.on('error', (err) => broadcastUpdateStatus('error', { message: String(err && err.message || err) }));
+  autoUpdater.on('download-progress', (p) => broadcastUpdateStatus('downloading', { progress: p.percent || 0 }));
+  autoUpdater.on('update-downloaded', (info) => {
+    updateState = Object.assign({}, updateState, { status: 'downloaded', version: info.version, progress: 100 });
+    sendUpdateUpdate();
+  });
+}
+
+function checkForUpdates() {
+  if (!app.isPackaged) return Promise.resolve();
+  return autoUpdater.checkForUpdates().catch((err) => {
+    broadcastUpdateStatus('error', { message: String(err && err.message || err) });
+  });
+}
+
+function downloadAndInstallUpdate() {
+  broadcastUpdateStatus('downloading', { progress: 0 });
+  autoUpdater.downloadUpdate().then(() => {
+    setTimeout(() => autoUpdater.quitAndInstall(true, true), 800);
+  }).catch((err) => {
+    broadcastUpdateStatus('error', { message: String(err && err.message || err) });
+  });
+}
+
+ipcMain.handle('update:check', () => checkForUpdates());
+ipcMain.handle('update:download', () => downloadAndInstallUpdate());
+ipcMain.handle('update:getState', () => updateState);
+
 /* ---------- window ---------- */
 
 function createWindow() {
@@ -208,6 +260,10 @@ app.whenReady().then(() => {
   settings.init();
   workspaces.init();
   createWindow();
+  setupAutoUpdater();
+  if (settings.get().autoUpdate !== false) {
+    setTimeout(checkForUpdates, 5000);
+  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

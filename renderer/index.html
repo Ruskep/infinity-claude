@@ -103,6 +103,19 @@
     </main>
   </div>
 
+  <!-- ======= UPDATE BANNER ======= -->
+  <div id="upd-banner" class="upd-banner hidden">
+    <div class="upd-banner-ic">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 11a8 8 0 1 0-8 8m8-8-9 9m9-9h-5m5 0v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="upd-banner-text">
+      <strong data-i18n="updBannerTitle">Доступна новая версия</strong>
+      <span id="upd-banner-sub" data-i18n="updBannerSub">Обнови, чтобы получить свежие функции и исправления.</span>
+    </div>
+    <button id="upd-banner-btn" class="btn primary" data-i18n="updBannerBtn">Обновить</button>
+    <button id="upd-banner-close" class="close-btn upd-banner-close" data-i18n-title="updBannerClose">✕</button>
+  </div>
+
   <!-- ======= APPROVAL MODAL ======= -->
   <div id="approval" class="modal hidden">
     <div class="modal-content approval">
@@ -140,6 +153,7 @@
           <button class="stab" data-tab="mcp" data-i18n="tabMcp">MCP-серверы</button>
           <button class="stab" data-tab="ui" data-i18n="tabUi">Интерфейс</button>
           <button class="stab" data-tab="skills" data-i18n="tabSkills">Скилы</button>
+          <button class="stab" data-tab="updates" data-i18n="tabUpdates">Обновления</button>
           <button class="stab" data-tab="system" data-i18n="tabSystem">Система</button>
         </nav>
         <div class="settings-panels">
@@ -326,6 +340,21 @@
             </div>
             <div id="settings-skills-list" class="settings-skills-list"></div>
             <p class="section-note" data-i18n="skillToggleHint">Включённые скилы отправляются модели перед каждым запросом и применяются, когда подходит их описание.</p>
+          </div>
+
+          <div class="spanel" id="spanel-updates">
+            <h3 data-i18n="tabUpdates">Обновления</h3>
+            <label class="chk switch-row">
+              <span data-i18n="autoUpdateOn">Автоматически проверять и ставить обновления</span>
+              <span class="switch"><input type="checkbox" id="cfg-autoupdate" /><i></i></span>
+            </label>
+            <p class="section-note" data-i18n="updNote">Новая версия ставится автоматически при запуске или по кнопке ниже.</p>
+            <div class="upd-status" id="upd-status" data-i18n="updIdle">Пока не проверялось</div>
+            <div class="upd-progress hidden" id="upd-progress"><div class="ob-boot-fill upd-progress-fill" id="upd-progress-fill"></div></div>
+            <div class="settings-actions">
+              <button id="upd-check-btn" class="btn" data-i18n="updCheck">Проверить обновления</button>
+              <button id="upd-install-btn" class="btn primary hidden" data-i18n="updInstall">Обновить сейчас</button>
+            </div>
           </div>
 
           <div class="spanel" id="spanel-system">

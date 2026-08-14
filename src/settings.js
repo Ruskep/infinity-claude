@@ -79,7 +79,8 @@ const DEFAULTS = {
   // состояние
   lastWorkspaceId: null,
   lastChatId: null,
-  onboarded: false // показывать онбординг при первом запуске
+  onboarded: false, // показывать онбординг при первом запуске
+  autoUpdate: true // автоматически проверять и ставить обновления
 };
 
 const SCHEMA = {
