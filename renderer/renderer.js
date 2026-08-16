@@ -112,9 +112,9 @@ function autosize() {
 
 function scrollToBottom() {
   if (state.settings && state.settings.autoScroll === false) return;
-  // автоскроллим только если пользователь и так внизу — избегаем reflow на каждый чанк
-  const nearBottom = elMessages.scrollHeight - elMessages.scrollTop - elMessages.clientHeight < 120;
-  if (nearBottom) elMessages.scrollTop = elMessages.scrollHeight;
+  // всегда прилипаем к низу: отправил сообщение — и сразу видно ответ,
+  // ассистент пишет — лента сама едет вниз, крутить вручную не нужно
+  elMessages.scrollTop = elMessages.scrollHeight;
 }
 
 function addMsgEl() {

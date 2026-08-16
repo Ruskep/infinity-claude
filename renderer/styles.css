@@ -502,6 +502,17 @@ body.theme-anim *::before, body.theme-anim *::after {
   scroll-behavior: smooth;
 }
 
+/* карточки инструментов/опросов, попадающие прямо в #messages до появления
+   сообщения ассистента, не растягиваются на весь экран, а придерживаются
+   той же колонки, что и обычные сообщения (.msg) */
+#messages > .tool-card,
+#messages > .poll-card {
+  width: calc(100% - 56px);
+  max-width: var(--msg-max-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .empty-state { text-align: center; color: var(--text-dim); padding-top: 9vh; animation: fadeUp 0.5s var(--ease-out); }
 
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }

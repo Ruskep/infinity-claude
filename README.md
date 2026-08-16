@@ -69,7 +69,7 @@ It talks to models through **OmniRoute**, a free gateway that aggregates many Op
 
 ### Installer build
 
-Download `InfinityClaude Setup 1.0.0.exe` from the [Releases](../../releases) page and run it. No extra runtime is required.
+Download `InfinityClaude Setup 1.1.0.exe` from the [Releases](../../releases) page and run it. No extra runtime is required.
 
 ### From source
 
