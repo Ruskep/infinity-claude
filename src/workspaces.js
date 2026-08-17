@@ -18,7 +18,35 @@ function load() {
   }
   if (!Array.isArray(wsCache)) wsCache = [];
   ensureNoneWorkspace();
+  dedupeChatIds();
   return wsCache;
+}
+
+// чаты должны иметь глобально уникальные id — иначе чат с одинаковым id
+// в двух папках подсвечивается как «выбранный» и открывается не тот чат
+function uniqueChatId() {
+  let id;
+  do {
+    id = 'chat_' + Date.now() + '_' + Math.floor(Math.random() * 9999);
+  } while (wsCache.some((w) => (w.chats || []).some((c) => c.id === id)));
+  return id;
+}
+
+function dedupeChatIds() {
+  const seen = new Set();
+  let changed = false;
+  for (const w of wsCache) {
+    for (const c of (w.chats || [])) {
+      if (!c.id || seen.has(c.id)) {
+        c.id = uniqueChatId();
+        seen.add(c.id);
+        changed = true;
+      } else {
+        seen.add(c.id);
+      }
+    }
+  }
+  if (changed) save();
 }
 
 function ensureNoneWorkspace() {
@@ -73,7 +101,16 @@ function saveChat(workspaceId, chat) {
   load();
   const ws = wsCache.find((w) => w.id === workspaceId);
   if (!ws) return null;
-  const idx = ws.chats.findIndex((c) => c.id === chat.id);
+  let id = chat.id;
+  // защита от дубликатов: если id уже занят чатом в ДРУГОМ воркспейсе,
+  // а в этом его нет — сохраняем под новым id
+  const inThis = ws.chats.some((c) => c.id === id);
+  const inOther = !inThis && wsCache.some((w) => w.id !== workspaceId && (w.chats || []).some((c) => c.id === id));
+  if (inOther) {
+    id = uniqueChatId();
+    chat = { ...chat, id };
+  }
+  const idx = ws.chats.findIndex((c) => c.id === id);
   if (idx >= 0) ws.chats[idx] = chat;
   else ws.chats.unshift(chat);
   save();

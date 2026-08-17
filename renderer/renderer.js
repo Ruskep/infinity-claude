@@ -32,8 +32,14 @@ function activeMessages() {
   return s ? s.messages : state.messages;
 }
 
+// ключ сессии = id чата + id воркспейса: чаты с одинаковым id в разных папках
+// не должны делиться одной сессией (иначе открывается не тот чат)
+function sessionKey(wsId, chatId) {
+  return (chatId || '__new__') + '@' + (wsId || 'none');
+}
+
 function ensureSession(chatId, initialMessages, wsId) {
-  const key = chatId || '__new__';
+  const key = sessionKey(wsId, chatId);
   let sess = state.sessions[key];
   if (!sess) {
     sess = {
@@ -67,12 +73,12 @@ function sessionContainer(sess) {
 }
 
 // при создании/сохранении чата переносим сессию под новый id
-function renameSession(oldKey, newKey) {
+function renameSession(oldKey, newKey, chatId) {
   const s = state.sessions[oldKey];
   if (!s || oldKey === newKey) return s;
   delete state.sessions[oldKey];
   s.id = newKey;
-  s.chatId = newKey;
+  s.chatId = chatId || s.chatId;
   state.sessions[newKey] = s;
   if (state.activeSessionId === oldKey) state.activeSessionId = newKey;
   return s;
@@ -507,9 +513,10 @@ function renderWorkspaces() {
 
 function buildChatItem(ws, chat) {
   const item = document.createElement('div');
-  const sess = state.sessions[chat.id];
+  const sess = state.sessions[sessionKey(ws.id, chat.id)];
   const streaming = !!(sess && sess.streaming);
-  item.className = 'chat-item' + (chat.id === state.activeChatId ? ' active' : '') + (streaming ? ' streaming' : '');
+  const isActive = chat.id === state.activeChatId && ws.id === (state.activeWorkspace ? state.activeWorkspace.id : null);
+  item.className = 'chat-item' + (isActive ? ' active' : '') + (streaming ? ' streaming' : '');
   item.dataset.chatId = chat.id;
   item.innerHTML = `
     <div class="chat-main">
@@ -547,11 +554,11 @@ function buildChatItem(ws, chat) {
     }
     await api.workspaceDeleteChat({ workspaceId: ws.id, chatId: chat.id });
     // если удалили стримящий чат — останавливаем его стрим и убираем сессию
-    const gone = state.sessions[chat.id];
+    const gone = state.sessions[sessionKey(ws.id, chat.id)];
     if (gone) {
       if (gone.streaming) api.stopAgent(gone.streamKey);
       if (gone.unsubscribe) { gone.unsubscribe(); gone.unsubscribe = null; }
-      delete state.sessions[chat.id];
+      delete state.sessions[sessionKey(ws.id, chat.id)];
     }
     if (state.activeChatId === chat.id) newChat();
     await loadWorkspaces();
@@ -621,6 +628,15 @@ function chatTitle(sess) {
   return t.trim().slice(0, 42) || i18nT('chat');
 }
 
+// глобально уникальный id чата — проверяем по всем воркспейсам
+function newChatId() {
+  let id;
+  do {
+    id = 'chat_' + Date.now() + '_' + Math.floor(Math.random() * 9999);
+  } while (state.workspaces.some((w) => (w.chats || []).some((c) => c.id === id)));
+  return id;
+}
+
 function saveChat(sess) {
   const src = sess || currentSession();
   // сессия может быть фоновой (стрим другого воркспейса завершился) —
@@ -640,7 +656,7 @@ function saveChat(sess) {
     if (existing && existing.manualTitle) { title = existing.title; manualTitle = true; }
   }
   const chat = {
-    id: chatId || 'chat_' + Date.now(),
+    id: chatId || newChatId(),
     title,
     manualTitle,
     messages: msgs,
@@ -650,7 +666,7 @@ function saveChat(sess) {
     state.activeChatId = chat.id;
     // переносим сессию под новый id, чтобы следующие сообщения шли в неё же
     const cur = src || currentSession();
-    if (cur && cur.id === '__new__') renameSession('__new__', chat.id);
+    if (cur && !cur.chatId) renameSession(cur.id, sessionKey(ws.id, chat.id), chat.id);
   }
   ws.chats = ws.chats || [];
   const idx = ws.chats.findIndex((c) => c.id === chat.id);
@@ -691,8 +707,11 @@ function updateSidebarState() {
     if (chats) chats.classList.toggle('collapsed', collapsed);
   }
   const items = elWsScroll.querySelectorAll('.chat-item');
+  const activeWsId = state.activeWorkspace ? state.activeWorkspace.id : null;
   for (const it of items) {
-    it.classList.toggle('active', it.dataset.chatId === state.activeChatId);
+    const g = it.closest('.ws-group');
+    const inActiveWs = !activeWsId || (g && g.dataset.wsId === activeWsId);
+    it.classList.toggle('active', inActiveWs && it.dataset.chatId === state.activeChatId);
   }
   renderBreadcrumb();
 }
@@ -737,7 +756,7 @@ function newChat() {
   if (prev && prev.container) prev.container.remove();
   if (prev) prev.dom = false;
   // сессия «нового чата» больше не нужна — следующее сообщение начнёт новую
-  delete state.sessions['__new__'];
+  delete state.sessions[sessionKey(state.activeWorkspace ? state.activeWorkspace.id : null, '__new__')];
   state.activeSessionId = null;
   clearMessages();
   updateStreamUI();
@@ -1098,7 +1117,7 @@ function setStreaming(on, sess) {
 // обновляет индикатор «работает» у чата в сайдбаре при старте/остановке стрима
 function updateChatLiveBadge(sess) {
   if (!sess || !sess.chatId) return;
-  const item = elWsScroll.querySelector('.chat-item[data-chat-id="' + sess.chatId + '"]');
+  const item = elWsScroll.querySelector('.ws-group[data-ws-id="' + (sess.wsId || 'none') + '"] .chat-item[data-chat-id="' + sess.chatId + '"]');
   if (!item) return;
   item.classList.toggle('streaming', !!sess.streaming);
   let dot = item.querySelector('.chat-live');
