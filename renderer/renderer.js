@@ -1156,10 +1156,12 @@ async function loadModels() {
     return;
   }
   state.models = models;
-  // вся палитра моделей, распределённая по категориям: Claude и всё остальное
-  const ids = [...new Set(models.map((m) => m.id).filter(Boolean))];
-  const claude = ids.filter((id) => /claude/i.test(id)).sort();
-  const others = ids.filter((id) => !/claude/i.test(id)).sort();
+  // шлюз отдаёт много вариантов одной модели (no-think, low/medium/high/xhigh,
+  // пары cl/…cline/… и kr/…kiro/…): приводим к уникальным рабочим моделям
+  const ids = dedupeModels(models.map((m) => m.id).filter(Boolean));
+  const isClaude = (id) => /claude/i.test(id) || /^(opus|sonnet|haiku)/i.test(modelCanonical(id));
+  const claude = ids.filter(isClaude).sort();
+  const others = ids.filter((id) => !isClaude(id)).sort();
 
   elModel.innerHTML = '';
   elModel.appendChild(op('auto', i18nT('smartRouting'), (!state.settings.model || state.settings.model === 'auto')));
@@ -1181,6 +1183,34 @@ async function loadModels() {
     elModel.value = state.settings.model;
   }
   setStatus('green', i18nT('gatewayOk', { n: ids.length }));
+}
+
+// «каноническое» имя модели без провайдера и маркеров-настроек — для дедупликации
+function modelCanonical(id) {
+  let s = String(id).toLowerCase()
+    .replace(/^no-think\//, '')            // вариант без размышлений
+    .replace(/^[a-z0-9._-]+\//, '');       // префикс провайдера (cl/, cline/, kr/, kiro/ …)
+  s = s
+    .replace(/-low|-medium|-high|-xhigh/g, '')
+    .replace(/-500k/g, '')
+    .replace(/[:._-](free|fast|pro|cheap|reliable|chaos|vision|multimodal)$/g, '')
+    .trim();
+  return s;
+}
+
+// убираем служебные auto/* и дубли: из двух моделей с одним каноническим
+// именем оставляем первую (из доступных, «подключённых» на шлюзе)
+function dedupeModels(ids) {
+  const seen = new Set();
+  const out = [];
+  for (const id of ids) {
+    if (/^auto\//i.test(id)) continue;
+    const canon = modelCanonical(id);
+    if (!canon || seen.has(canon)) continue;
+    seen.add(canon);
+    out.push(id);
+  }
+  return out;
 }
 
 function op(value, label, selected) {
