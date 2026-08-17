@@ -1156,20 +1156,31 @@ async function loadModels() {
     return;
   }
   state.models = models;
-  const claude = models.map((m) => m.id).filter((id) => /claude/i.test(id)).sort();
+  // вся палитра моделей, распределённая по категориям: Claude и всё остальное
+  const ids = [...new Set(models.map((m) => m.id).filter(Boolean))];
+  const claude = ids.filter((id) => /claude/i.test(id)).sort();
+  const others = ids.filter((id) => !/claude/i.test(id)).sort();
 
   elModel.innerHTML = '';
   elModel.appendChild(op('auto', i18nT('smartRouting'), (!state.settings.model || state.settings.model === 'auto')));
 
-  const seen = new Set();
-  const prefs = ['kr/claude-sonnet-4.5', 'kr/claude-sonnet-5', 'kr/claude-opus', 'kiro/claude-sonnet-5'];
-  for (const p of prefs) if (claude.includes(p)) addOpt(p, seen);
-  for (const m of claude) if (!/no-think|low|medium|high|xhigh/.test(m)) addOpt(m, seen);
+  if (claude.length) {
+    const g1 = document.createElement('optgroup');
+    g1.label = 'Claude';
+    for (const id of claude) g1.appendChild(op(id, prettyModel(id)));
+    elModel.appendChild(g1);
+  }
+  if (others.length) {
+    const g2 = document.createElement('optgroup');
+    g2.label = i18nT('otherModels');
+    for (const id of others) g2.appendChild(op(id, prettyModel(id)));
+    elModel.appendChild(g2);
+  }
 
   if (state.settings.model && Array.from(elModel.options).some((o) => o.value === state.settings.model)) {
     elModel.value = state.settings.model;
   }
-  setStatus('green', i18nT('gatewayOk', { n: claude.length }));
+  setStatus('green', i18nT('gatewayOk', { n: ids.length }));
 }
 
 function op(value, label, selected) {
@@ -1178,12 +1189,6 @@ function op(value, label, selected) {
   o.textContent = label;
   if (selected) o.selected = true;
   return o;
-}
-
-function addOpt(id, seen) {
-  if (seen.has(id)) return;
-  seen.add(id);
-  elModel.appendChild(op(id, prettyModel(id)));
 }
 
 /* ---------- skills ---------- */

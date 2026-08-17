@@ -481,18 +481,30 @@ body.theme-anim *::before, body.theme-anim *::after {
 .crumb-sep { color: var(--text-dim); }
 
 #model-select {
-  background: transparent;
-  color: var(--text-dim);
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--bg-soft);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%23888888' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 5px 9px;
+  border-radius: 8px;
+  padding: 5px 24px 5px 10px;
   font-size: 12px;
   font-weight: 600;
-  max-width: 260px;
+  max-width: 280px;
   cursor: pointer;
   outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, color 0.15s;
+  text-overflow: ellipsis;
 }
-#model-select:hover { border-color: var(--accent); color: var(--text); }
+#model-select:hover { border-color: var(--accent); }
+#model-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+#model-select option,
+#model-select optgroup { background: var(--bg); color: var(--text); font-size: 12px; }
+#model-select optgroup { font-weight: 700; color: var(--accent); }
+#model-select optgroup option { font-weight: 500; color: var(--text); }
 
 .status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); }
 .status #status-text { animation: fadeIn 0.25s ease; }
