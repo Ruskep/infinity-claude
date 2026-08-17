@@ -312,6 +312,19 @@ body.theme-anim *::before, body.theme-anim *::after {
   opacity: 0.85;
 }
 
+/* индикатор «в этом чате сейчас идёт работа» */
+.chat-live { display: inline-flex; align-items: center; flex-shrink: 0; }
+.chat-live-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: chatLivePulse 1.2s ease-in-out infinite;
+}
+@keyframes chatLivePulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); transform: scale(0.9); }
+  50% { box-shadow: 0 0 0 5px transparent; transform: scale(1); }
+}
+
 .chat-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.12s; flex-shrink: 0; }
 .chat-item:hover .chat-actions { opacity: 1; }
 .chat-actions button {

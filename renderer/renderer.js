@@ -425,13 +425,18 @@ function renderWorkspaces() {
   }
 
   const activeId = state.activeWorkspace && state.activeWorkspace.id;
+  // состояние свёрнутости хранится в Set (стрелочка переключает любую папку,
+  // открытыми могут быть сразу несколько)
+  if (!state.collapsedWs) {
+    state.collapsedWs = new Set();
+    // по умолчанию реальные папки свёрнуты, кроме активной; «Без проекта» раскрыта
+    for (const w of state.workspaces) {
+      if (!isNoneWs(w) && w.id !== activeId) state.collapsedWs.add(w.id);
+    }
+  }
   for (const ws of state.workspaces) {
     const isNone = isNoneWs(ws);
-    // «Без проекта» раскрыта по умолчанию (сворачивается только явно);
-    // реальные проекты свёрнуты, если не активны.
-    const collapsed = state.collapsedWs && state.collapsedWs.has(ws.id)
-      ? true
-      : (!isNone && ws.id !== activeId);
+    const collapsed = state.collapsedWs.has(ws.id);
     const group = document.createElement('div');
     group.className = 'ws-group';
     group.dataset.wsId = ws.id;
@@ -496,11 +501,15 @@ function renderWorkspaces() {
 
 function buildChatItem(ws, chat) {
   const item = document.createElement('div');
-  item.className = 'chat-item' + (chat.id === state.activeChatId ? ' active' : '');
+  const sess = state.sessions[chat.id];
+  const streaming = !!(sess && sess.streaming);
+  item.className = 'chat-item' + (chat.id === state.activeChatId ? ' active' : '') + (streaming ? ' streaming' : '');
+  item.dataset.chatId = chat.id;
   item.innerHTML = `
     <div class="chat-main">
       <div class="chat-title">
         <span class="chat-name">${escapeHtml(chat.title || i18nT('chat'))}</span>
+        ${streaming ? '<span class="chat-live" title="' + i18nT('chatLive') + '"><span class="chat-live-dot"></span></span>' : ''}
         ${chatTime(chat) ? `<span class="chat-time">${escapeHtml(chatTime(chat))}</span>` : ''}
       </div>
       ${chatPreview(chat) ? `<div class="chat-preview">${escapeHtml(chatPreview(chat))}</div>` : ''}
@@ -514,11 +523,14 @@ function buildChatItem(ws, chat) {
     e.stopPropagation();
     const next = prompt(i18nT('renameChat'), chat.title || '');
     if (next === null) return;
-    await api.workspaceRenameChat({ workspaceId: ws.id, chatId: chat.id, title: next });
-    if (state.activeChatId === chat.id) {
-      const local = state.workspaces.find((w) => w.id === ws.id);
-      const c = local && local.chats.find((x) => x.id === chat.id);
-      if (c) c.title = next.trim() || c.title;
+    const trimmed = next.trim();
+    if (!trimmed) return;
+    await api.workspaceRenameChat({ workspaceId: ws.id, chatId: chat.id, title: trimmed });
+    const local = state.workspaces.find((w) => w.id === ws.id);
+    const c = local && local.chats.find((x) => x.id === chat.id);
+    if (c) {
+      c.title = trimmed;
+      c.manualTitle = true; // не перезатирать автоматическим заголовком при saveChat
     }
     await loadWorkspaces();
     state.activeWorkspace = state.workspaces.find((w) => w.id === ws.id) || state.activeWorkspace;
@@ -579,6 +591,8 @@ async function activateWorkspace(id) {
     else state.workspaces.unshift(ws);
     state.activeChatId = null;
     state.messages = [];
+    // активную папку показываем раскрытой (если Set уже инициализирован)
+    if (state.collapsedWs) state.collapsedWs.delete(id);
     const prev = currentSession();
     if (prev && prev.container) prev.container.remove();
     if (prev) prev.dom = false;
@@ -614,9 +628,17 @@ function saveChat(sess) {
   const msgs = src ? src.messages : state.messages;
   const chatId = (src && src.chatId) || state.activeChatId;
   const newId = !chatId;
+  // ручное название (переименовано карандашом) не затираем автозаголовком
+  let title = chatTitle(src);
+  let manualTitle = false;
+  if (!newId && ws.chats) {
+    const existing = ws.chats.find((c) => c.id === chatId);
+    if (existing && existing.manualTitle) { title = existing.title; manualTitle = true; }
+  }
   const chat = {
     id: chatId || 'chat_' + Date.now(),
-    title: chatTitle(src),
+    title,
+    manualTitle,
     messages: msgs,
     updatedAt: Date.now()
   };
@@ -879,6 +901,8 @@ async function send() {
 
   const userContent = text;
   target.messages.push({ role: 'user', content: userContent, attachments });
+  // чат появляется в сайдбаре сразу при отправке, а не после ответа
+  saveChat(target);
   const systemMsg = buildSystemMessage();
 
   let assistantEl = null;
@@ -1047,12 +1071,32 @@ function finalize(sess, unsub) {
 function setStreaming(on, sess) {
   const target = sess || currentSession();
   if (target) target.streaming = on;
+  updateChatLiveBadge(target);
   const active = currentSession();
   const isActive = !target || (active && active.id === target.id);
   if (isActive) {
     elSend.disabled = on || (elInput.value.trim().length === 0 && !state.pendingFiles.length);
     elSend.classList.toggle('hidden', on);
     elStop.classList.toggle('hidden', !on);
+  }
+}
+
+// обновляет индикатор «работает» у чата в сайдбаре при старте/остановке стрима
+function updateChatLiveBadge(sess) {
+  if (!sess || !sess.chatId) return;
+  const item = elWsScroll.querySelector('.chat-item[data-chat-id="' + sess.chatId + '"]');
+  if (!item) return;
+  item.classList.toggle('streaming', !!sess.streaming);
+  let dot = item.querySelector('.chat-live');
+  if (sess.streaming && !dot) {
+    const nameEl = item.querySelector('.chat-title');
+    const badge = document.createElement('span');
+    badge.className = 'chat-live';
+    badge.title = i18nT('chatLive');
+    badge.innerHTML = '<span class="chat-live-dot"></span>';
+    nameEl.insertBefore(badge, nameEl.querySelector('.chat-time') || null);
+  } else if (!sess.streaming && dot) {
+    dot.remove();
   }
 }
 
