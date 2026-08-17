@@ -349,7 +349,13 @@ function toggleWsCollapse(wsId) {
   if (!state.collapsedWs) state.collapsedWs = new Set();
   if (state.collapsedWs.has(wsId)) state.collapsedWs.delete(wsId);
   else state.collapsedWs.add(wsId);
-  renderWorkspaces();
+  const g = elWsScroll.querySelector('.ws-group[data-ws-id="' + wsId + '"]');
+  if (!g) { renderWorkspaces(); return; }
+  const collapsed = state.collapsedWs.has(wsId);
+  const chev = g.querySelector('.chev');
+  if (chev) chev.classList.toggle('open', !collapsed);
+  const chats = g.querySelector('.ws-chats');
+  if (chats) chats.classList.toggle('collapsed', collapsed);
 }
 
 function persistUIState() {
@@ -519,23 +525,21 @@ function buildChatItem(ws, chat) {
       <button class="chat-del" title="${i18nT('deleteTitle')}">✕</button>
     </div>`;
   const nameEl = item.querySelector('.chat-name');
-  nameEl.ondblclick = async (e) => {
-    e.stopPropagation();
+  const renameChat = () => {
     const next = prompt(i18nT('renameChat'), chat.title || '');
     if (next === null) return;
     const trimmed = next.trim();
     if (!trimmed) return;
-    await api.workspaceRenameChat({ workspaceId: ws.id, chatId: chat.id, title: trimmed });
-    const local = state.workspaces.find((w) => w.id === ws.id);
-    const c = local && local.chats.find((x) => x.id === chat.id);
-    if (c) {
-      c.title = trimmed;
-      c.manualTitle = true; // не перезатирать автоматическим заголовком при saveChat
-    }
-    await loadWorkspaces();
-    state.activeWorkspace = state.workspaces.find((w) => w.id === ws.id) || state.activeWorkspace;
-    renderWorkspaces();
+    api.workspaceRenameChat({ workspaceId: ws.id, chatId: chat.id, title: trimmed }).then(() => {
+      const local = state.workspaces.find((w) => w.id === ws.id);
+      const c = local && local.chats.find((x) => x.id === chat.id);
+      if (c) { c.title = trimmed; c.manualTitle = true; }
+      const el = elWsScroll.querySelector('.chat-item[data-chat-id="' + chat.id + '"] .chat-name');
+      if (el) el.textContent = trimmed;
+      else renderWorkspaces();
+    });
   };
+  nameEl.ondblclick = (e) => { e.stopPropagation(); renameChat(); };
   item.querySelector('.chat-del').onclick = async (e) => {
     e.stopPropagation();
     if (state.settings && state.settings.confirmDelete !== false) {
@@ -554,7 +558,7 @@ function buildChatItem(ws, chat) {
   };
   item.querySelector('.chat-rename').onclick = (e) => {
     e.stopPropagation();
-    nameEl.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    renameChat();
   };
   item.onclick = () => openChat(ws.id, chat.id);
   return item;
@@ -585,7 +589,7 @@ async function activateWorkspace(id) {
   if (ws) {
     state.activeWorkspace = ws;
     // держим список сайдбара синхронизированным с активным объектом,
-    // иначе refreshChatList() читает старый снапшот без нового чата
+    // иначе upsertChatItem() читает старый снапшот без нового чата
     const idx = state.workspaces.findIndex((w) => w.id === ws.id);
     if (idx >= 0) state.workspaces[idx] = ws;
     else state.workspaces.unshift(ws);
@@ -598,7 +602,7 @@ async function activateWorkspace(id) {
     if (prev) prev.dom = false;
     state.activeSessionId = null;
     clearMessages();
-    renderWorkspaces();
+    updateSidebarState();
     persistUIState();
     updateStreamUI();
     setStatus('green', i18nT('project') + ': ' + ws.name);
@@ -653,34 +657,44 @@ function saveChat(sess) {
   if (idx >= 0) ws.chats[idx] = chat;
   else ws.chats.unshift(chat);
   api.workspaceSaveChat({ workspaceId: ws.id, chat: { ...chat, messages: chat.messages.map((m) => ({ ...m })) } });
-  if (ws.id === (state.activeWorkspace && state.activeWorkspace.id)) refreshChatList();
-  else renderWorkspaces();
+  upsertChatItem(ws, chat);
 }
 
-// точечное обновление списка чатов активного воркспейса — без перерисовки всего сайдбара
-function refreshChatList() {
-  if (!state.activeWorkspace) { renderWorkspaces(); return; }
+// точечное обновление одного чата в списке сайдбара — без перерисовки всего сайдбара
+function upsertChatItem(ws, chat) {
   const groups = elWsScroll.querySelectorAll('.ws-group');
   let group = null;
   for (const g of groups) {
-    if (g.dataset.wsId === state.activeWorkspace.id) { group = g; break; }
+    if (g.dataset.wsId === ws.id) { group = g; break; }
   }
   if (!group) { renderWorkspaces(); return; }
   const chatsInner = group.querySelector('.ws-chats-inner') || group.querySelector('.ws-chats');
-  const ws = state.workspaces.find((w) => w.id === state.activeWorkspace.id) || state.activeWorkspace;
-  chatsInner.innerHTML = '';
-  if (!ws.chats.length) {
-    const e2 = document.createElement('div');
-    e2.className = 'ws-empty';
-    e2.textContent = i18nT('noChats');
-    chatsInner.appendChild(e2);
-    return;
+  const existing = chatsInner.querySelector('.chat-item[data-chat-id="' + chat.id + '"]');
+  if (existing) {
+    existing.replaceWith(buildChatItem(ws, chat));
+  } else {
+    const empty = chatsInner.querySelector('.ws-empty');
+    if (empty) empty.remove();
+    chatsInner.insertBefore(buildChatItem(ws, chat), chatsInner.firstChild);
   }
-  const frag = document.createDocumentFragment();
-  for (const chat of ws.chats) {
-    frag.appendChild(buildChatItem(ws, chat));
+}
+
+// лёгкое обновление выделения и свёрнутости сайдбара — вместо полной renderWorkspaces()
+function updateSidebarState() {
+  const groups = elWsScroll.querySelectorAll('.ws-group');
+  if (!groups.length) { renderWorkspaces(); return; }
+  for (const g of groups) {
+    const collapsed = !!(state.collapsedWs && state.collapsedWs.has(g.dataset.wsId));
+    const chev = g.querySelector('.chev');
+    if (chev) chev.classList.toggle('open', !collapsed);
+    const chats = g.querySelector('.ws-chats');
+    if (chats) chats.classList.toggle('collapsed', collapsed);
   }
-  chatsInner.appendChild(frag);
+  const items = elWsScroll.querySelectorAll('.chat-item');
+  for (const it of items) {
+    it.classList.toggle('active', it.dataset.chatId === state.activeChatId);
+  }
+  renderBreadcrumb();
 }
 
 function openChat(wsId, chatId) {
@@ -709,7 +723,7 @@ function openChat(wsId, chatId) {
     }
   }
   updateStreamUI();
-  renderWorkspaces();
+  updateSidebarState();
   persistUIState();
 }
 
@@ -727,7 +741,7 @@ function newChat() {
   state.activeSessionId = null;
   clearMessages();
   updateStreamUI();
-  renderWorkspaces();
+  updateSidebarState();
   persistUIState();
 }
 
