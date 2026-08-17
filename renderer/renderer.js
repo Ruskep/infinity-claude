@@ -10,14 +10,73 @@ const state = {
   skills: [],
   skillEnabled: {},
   mcpServers: [],
-  streaming: false,
   messages: [],
-  toolCards: [],
   pendingFiles: [],
-  lastAssistant: null
+  // сессии по чатам: каждый чат имеет собственный стрим, свои сообщения и DOM,
+  // чтобы параллельные чаты не мешали друг другу
+  sessions: {},
+  activeSessionId: null
 };
 
-let unsubscribe = null;
+/* ---------- сессии по чатам ---------- */
+// Каждый чат имеет свою сессию: собственные сообщения, DOM-контейнер, статус стрима
+// и подписку на чанки. Это позволяет работать сразу с несколькими чатами: пока один
+// стримит, в других можно читать историю и отправлять новые сообщения.
+
+function currentSession() {
+  return state.sessions[state.activeSessionId] || null;
+}
+
+function activeMessages() {
+  const s = currentSession();
+  return s ? s.messages : state.messages;
+}
+
+function ensureSession(chatId, initialMessages, wsId) {
+  const key = chatId || '__new__';
+  let sess = state.sessions[key];
+  if (!sess) {
+    sess = {
+      id: key,
+      chatId: chatId || null,
+      wsId: wsId || null,
+      streamKey: 's_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8), // уникальный ключ для роутинга чанков/остановки стрима
+      messages: initialMessages ? initialMessages.map((m) => ({ ...m })) : [],
+      toolCards: [],
+      lastAssistant: null,
+      container: null, // создаётся при первом рендере
+      unsubscribe: null,
+      streaming: false,
+      assistantEl: null,
+      currentText: '',
+      round: 0,
+      dom: false // контейнер смонтирован в elMessages (сессия видна)
+    };
+    state.sessions[key] = sess;
+  }
+  return sess;
+}
+
+// вернуть DOM-контейнер сессии (создаёт при необходимости)
+function sessionContainer(sess) {
+  if (!sess.container) {
+    sess.container = document.createElement('div');
+    sess.container.className = 'msg-session';
+  }
+  return sess.container;
+}
+
+// при создании/сохранении чата переносим сессию под новый id
+function renameSession(oldKey, newKey) {
+  const s = state.sessions[oldKey];
+  if (!s || oldKey === newKey) return s;
+  delete state.sessions[oldKey];
+  s.id = newKey;
+  s.chatId = newKey;
+  state.sessions[newKey] = s;
+  if (state.activeSessionId === oldKey) state.activeSessionId = newKey;
+  return s;
+}
 
 /* ---------- refs ---------- */
 const $ = (id) => document.getElementById(id);
@@ -110,15 +169,18 @@ function autosize() {
   elInput.style.height = Math.min(elInput.scrollHeight, 220) + 'px';
 }
 
-function scrollToBottom() {
+function scrollToBottom(sess) {
   if (state.settings && state.settings.autoScroll === false) return;
+  // скроллим только видимую (активную) сессию; фоновые сессии не трогают ленту
+  if (sess && !sess.dom) return;
   // всегда прилипаем к низу: отправил сообщение — и сразу видно ответ,
   // ассистент пишет — лента сама едет вниз, крутить вручную не нужно
   elMessages.scrollTop = elMessages.scrollHeight;
 }
 
-function addMsgEl() {
+function addMsgEl(sess) {
   elEmpty.classList.add('hidden');
+  const target = sess ? sessionContainer(sess) : elMessages;
   const wrapper = document.createElement('div');
   wrapper.className = 'msg';
   const label = document.createElement('div');
@@ -127,13 +189,13 @@ function addMsgEl() {
   content.className = 'msg-content';
   wrapper.appendChild(label);
   wrapper.appendChild(content);
-  elMessages.appendChild(wrapper);
-  scrollToBottom();
+  target.appendChild(wrapper);
+  scrollToBottom(sess);
   return { wrapper, label, content };
 }
 
-function addUserMsg(text, attachments) {
-  const m = addMsgEl();
+function addUserMsg(text, attachments, sess) {
+  const m = addMsgEl(sess);
   m.label.textContent = i18nT('you');
   m.wrapper.classList.add('user');
   if (attachments && attachments.length) {
@@ -163,22 +225,22 @@ function addUserMsg(text, attachments) {
   return m;
 }
 
-function addAssistantMsgStreamingLabel(round) {
-  const m = addMsgEl();
+function addAssistantMsgStreamingLabel(round, sess) {
+  const m = addMsgEl(sess);
   m.label.textContent = 'Claude';
   m.label.dataset.round = round;
   const md = document.createElement('div');
   md.className = 'markdown';
   m.content.appendChild(md);
   m.md = md;
-  state.lastAssistant = m.wrapper;
+  if (sess) sess.lastAssistant = m.wrapper;
   return m;
 }
 
 // троттлинг рендера markdown: пересоздаём innerHTML не чаще 1 раза в 60мс,
 // чтобы не блокировать UI (в т.ч. сайдбар) на каждый символ стрима
 const mdLastFlush = new Map();
-function renderAssistant(m, text, opts) {
+function renderAssistant(m, text, opts, sess) {
   if (!m.md) return;
   const live = !opts || opts.live !== false; // live = ещё идёт стрим
   const now = performance.now();
@@ -198,14 +260,14 @@ function renderAssistant(m, text, opts) {
   } else {
     m.md.innerHTML = renderMarkdown(text);
   }
-  scrollToBottom();
+  scrollToBottom(sess);
 }
 // принудительно дорисовать финальный текст после конца стрима
 function flushMd(m) {
   mdLastFlush.delete(m);
 }
 
-function addToolCard(wrapper, stateIm) {
+function addToolCard(wrapper, stateIm, sess) {
   const el = document.createElement('div');
   el.className = 'tool-card';
   const t = stateIm.tool;
@@ -225,8 +287,8 @@ function addToolCard(wrapper, stateIm) {
     </div>
     <div class="tool-cmd">${escapeHtml(cmdText)}</div>`;
   if (wrapper) wrapper.appendChild(el);
-  else elMessages.appendChild(el);
-  scrollToBottom();
+  else sessionContainer(sess).appendChild(el);
+  scrollToBottom(sess);
   return el;
 }
 
@@ -242,7 +304,7 @@ function stateSpinner(s) {
   return '';
 }
 
-function setToolState(card, stateIm) {
+function setToolState(card, stateIm, sess) {
   if (!card) return;
   const elState = card.querySelector('.tool-state');
   if (elState) {
@@ -257,7 +319,7 @@ function setToolState(card, stateIm) {
     div.textContent = stateIm.resultText.slice(0, 4000);
     card.appendChild(div);
   }
-  scrollToBottom();
+  scrollToBottom(sess);
 }
 
 /* ---------- workspaces ---------- */
@@ -468,6 +530,13 @@ function buildChatItem(ws, chat) {
       if (!confirm(i18nT('removeChat', { name: (chat.title || i18nT('chat')) }))) return;
     }
     await api.workspaceDeleteChat({ workspaceId: ws.id, chatId: chat.id });
+    // если удалили стримящий чат — останавливаем его стрим и убираем сессию
+    const gone = state.sessions[chat.id];
+    if (gone) {
+      if (gone.streaming) api.stopAgent(gone.streamKey);
+      if (gone.unsubscribe) { gone.unsubscribe(); gone.unsubscribe = null; }
+      delete state.sessions[chat.id];
+    }
     if (state.activeChatId === chat.id) newChat();
     await loadWorkspaces();
   };
@@ -510,39 +579,60 @@ async function activateWorkspace(id) {
     else state.workspaces.unshift(ws);
     state.activeChatId = null;
     state.messages = [];
+    const prev = currentSession();
+    if (prev && prev.container) prev.container.remove();
+    if (prev) prev.dom = false;
+    state.activeSessionId = null;
     clearMessages();
     renderWorkspaces();
     persistUIState();
+    updateStreamUI();
     setStatus('green', i18nT('project') + ': ' + ws.name);
   }
 }
 
 /* ---------- conversations ---------- */
 
-function chatTitle() {
+function chatTitle(sess) {
   if (state.settings && state.settings.autoTitle === false) return i18nT('chat');
-  const m0 = state.messages.find((m) => m.role === 'user');
+  const msgs = sess ? sess.messages : activeMessages();
+  const m0 = msgs.find((m) => m.role === 'user');
   if (!m0) return i18nT('chat');
   const c = m0.content;
   const t = typeof c === 'string' ? c : (Array.isArray(c) && c[0] && c[0].text) || '';
   return t.trim().slice(0, 42) || i18nT('chat');
 }
 
-function saveChat() {
-  if (!state.activeWorkspace) return;
+function saveChat(sess) {
+  const src = sess || currentSession();
+  // сессия может быть фоновой (стрим другого воркспейса завершился) —
+  // сохраняем в её собственный воркспейс, а не в текущий активный
+  const ws = src && src.wsId
+    ? (state.workspaces.find((w) => w.id === src.wsId) || state.activeWorkspace)
+    : state.activeWorkspace;
+  if (!ws) return;
+  const msgs = src ? src.messages : state.messages;
+  const chatId = (src && src.chatId) || state.activeChatId;
+  const newId = !chatId;
   const chat = {
-    id: state.activeChatId || 'chat_' + Date.now(),
-    title: chatTitle(),
-    messages: state.messages,
+    id: chatId || 'chat_' + Date.now(),
+    title: chatTitle(src),
+    messages: msgs,
     updatedAt: Date.now()
   };
-  if (!state.activeChatId) state.activeChatId = chat.id;
-  state.activeWorkspace.chats = state.activeWorkspace.chats || [];
-  const idx = state.activeWorkspace.chats.findIndex((c) => c.id === chat.id);
-  if (idx >= 0) state.activeWorkspace.chats[idx] = chat;
-  else state.activeWorkspace.chats.unshift(chat);
-  api.workspaceSaveChat({ workspaceId: state.activeWorkspace.id, chat: { ...chat, messages: chat.messages.map((m) => ({ ...m })) } });
-  refreshChatList();
+  if (newId) {
+    state.activeChatId = chat.id;
+    // переносим сессию под новый id, чтобы следующие сообщения шли в неё же
+    const cur = src || currentSession();
+    if (cur && cur.id === '__new__') renameSession('__new__', chat.id);
+  }
+  ws.chats = ws.chats || [];
+  const idx = ws.chats.findIndex((c) => c.id === chat.id);
+  if (idx >= 0) ws.chats[idx] = chat;
+  else ws.chats.unshift(chat);
+  api.workspaceSaveChat({ workspaceId: ws.id, chat: { ...chat, messages: chat.messages.map((m) => ({ ...m })) } });
+  if (ws.id === (state.activeWorkspace && state.activeWorkspace.id)) refreshChatList();
+  else renderWorkspaces();
 }
 
 // точечное обновление списка чатов активного воркспейса — без перерисовки всего сайдбара
@@ -577,20 +667,26 @@ function openChat(wsId, chatId) {
   if (!chat) return;
   state.activeWorkspace = ws;
   state.activeChatId = chatId;
-  state.messages = chat.messages.map((m) => ({ ...m }));
-  clearMessages();
-  let i = 0;
-  for (const m of state.messages) {
-    if (m.role === 'user') {
-      const txt = typeof m.content === 'string' ? m.content : (m.content && Array.isArray(m.content) ? (m.content[0] && m.content[0].text || '') : '');
-      addUserMsg(txt, m.attachments).wrapper.style.setProperty('--msg-delay', Math.min(i * 45, 400) + 'ms');
-    } else if (m.role === 'assistant') {
-      const a = addAssistantMsgStreamingLabel(0);
-      a.wrapper.style.setProperty('--msg-delay', Math.min(i * 45, 400) + 'ms');
-      finalizeAssistant(a, m.content);
+  const sess = ensureSession(chatId, chat.messages, ws.id);
+  // подменяем контейнер видимой сессии в #messages
+  mountSession(sess);
+  state.messages = sess.messages;
+  // если контейнер ещё не отрисован — рисуем историю чата
+  if (!sess.container || sess.container.childElementCount === 0) {
+    let i = 0;
+    for (const m of sess.messages) {
+      if (m.role === 'user') {
+        const txt = typeof m.content === 'string' ? m.content : (m.content && Array.isArray(m.content) ? (m.content[0] && m.content[0].text || '') : '');
+        addUserMsg(txt, m.attachments, sess).wrapper.style.setProperty('--msg-delay', Math.min(i * 45, 400) + 'ms');
+      } else if (m.role === 'assistant') {
+        const a = addAssistantMsgStreamingLabel(0, sess);
+        a.wrapper.style.setProperty('--msg-delay', Math.min(i * 45, 400) + 'ms');
+        finalizeAssistant(a, m.content, sess);
+      }
+      i++;
     }
-    i++;
   }
+  updateStreamUI();
   renderWorkspaces();
   persistUIState();
 }
@@ -600,9 +696,33 @@ function openChat(wsId, chatId) {
 function newChat() {
   state.activeChatId = null;
   state.messages = [];
+  // убираем видимую сессию — остаётся пустой экран
+  const prev = currentSession();
+  if (prev && prev.container) prev.container.remove();
+  if (prev) prev.dom = false;
+  // сессия «нового чата» больше не нужна — следующее сообщение начнёт новую
+  delete state.sessions['__new__'];
+  state.activeSessionId = null;
   clearMessages();
+  updateStreamUI();
   renderWorkspaces();
   persistUIState();
+}
+
+// монтирует контейнер сессии в #messages (делает сессию видимой)
+function mountSession(sess) {
+  const prev = currentSession();
+  if (prev && prev !== sess) {
+    if (prev.container) prev.container.remove();
+    prev.dom = false;
+  }
+  state.activeSessionId = sess.id;
+  const c = sessionContainer(sess);
+  elMessages.innerHTML = '';
+  elEmpty.classList.add('hidden');
+  elMessages.appendChild(c);
+  sess.dom = true;
+  scrollToBottom(sess);
 }
 
 function clearMessages() {
@@ -693,12 +813,24 @@ function renderPendingFiles() {
 }
 
 function updateSendState() {
-  elSend.disabled = state.streaming || (elInput.value.trim().length === 0 && !state.pendingFiles.length);
+  const sess = currentSession();
+  const on = !!(sess && sess.streaming);
+  elSend.disabled = on || (elInput.value.trim().length === 0 && !state.pendingFiles.length);
+}
+
+// отражает состояние активной сессии в кнопках отправки/остановки
+function updateStreamUI() {
+  const sess = currentSession();
+  const on = !!(sess && sess.streaming);
+  elSend.disabled = on || (elInput.value.trim().length === 0 && !state.pendingFiles.length);
+  elSend.classList.toggle('hidden', on);
+  elStop.classList.toggle('hidden', !on);
 }
 
 async function send() {
   let text = elInput.value.trim();
-  if (state.streaming) return;
+  const sess = currentSession();
+  if (sess && sess.streaming) return;
   if (!text && !state.pendingFiles.length) return;
 
   // активный чат мог быть удалён/пересоздан — если id не существует, стартуем новый
@@ -733,72 +865,81 @@ async function send() {
   }
 
   const displayText = text;
-  addUserMsg(displayText, attachments);
+  // сессия для текущего чата (или новая для «нового чата»)
+  const target = ensureSession(state.activeChatId, state.messages, state.activeWorkspace ? state.activeWorkspace.id : null);
+  target.messages = target.messages.slice();
+  state.activeSessionId = target.id;
+  state.messages = target.messages;
+  if (!target.dom) mountSession(target);
+
+  addUserMsg(displayText, attachments, target);
   elInput.value = '';
   autosize();
   clearPendingFiles();
 
   const userContent = text;
-  state.messages.push({ role: 'user', content: userContent, attachments });
+  target.messages.push({ role: 'user', content: userContent, attachments });
   const systemMsg = buildSystemMessage();
 
   let assistantEl = null;
   let currentText = '';
   let round = 0;
 
-  setStreaming(true);
+  setStreaming(true, target);
   setStatus('amber', i18nT('statusClaudeThinking'));
 
-  unsubscribe = api.onAgentChunk((chunk) => {
+  const unsub = api.onAgentChunk((chunk) => {
+    // чанк от другой сессии (другого чата) — игнорируем, он уже обрабатывается своим хендлером
+    if (chunk.sessionId && chunk.sessionId !== target.streamKey) return;
     if (chunk.type === 'text') {
       round = chunk.round || round;
       if (!assistantEl || (assistantEl.round !== chunk.round)) {
-        if (assistantEl) finalizeAssistant(assistantEl, currentText);
+        if (assistantEl) finalizeAssistant(assistantEl, currentText, target);
         round = chunk.round || 0;
         currentText = '';
-        assistantEl = addAssistantMsgStreamingLabel(round);
+        assistantEl = addAssistantMsgStreamingLabel(round, target);
         assistantEl.round = round;
-        pullToolCardsTo(assistantEl.wrapper);
+        pullToolCardsTo(assistantEl.wrapper, target);
       }
       currentText += chunk.text;
-      renderAssistant(assistantEl, currentText);
+      renderAssistant(assistantEl, currentText, undefined, target);
     } else if (chunk.type === 'text_replace') {
       // основной процесс распознал «текстовые» вызовы инструментов и убрал их из текста
       if (assistantEl && assistantEl.round === chunk.round) {
         currentText = chunk.text || '';
-        finalizeAssistant(assistantEl, currentText);
+        finalizeAssistant(assistantEl, currentText, target);
       }
     } else if (chunk.type === 'round') {
       if (assistantEl && assistantEl.round !== chunk.round) {
-        finalizeAssistant(assistantEl, currentText);
+        finalizeAssistant(assistantEl, currentText, target);
         round = chunk.round;
         currentText = '';
-        assistantEl = addAssistantMsgStreamingLabel(chunk.round);
+        assistantEl = addAssistantMsgStreamingLabel(chunk.round, target);
         assistantEl.round = chunk.round;
       }
     } else if (chunk.type === 'tool_start') {
-      const target = assistantEl ? assistantEl.wrapper : null;
-      const card = addToolCard(target, { tool: chunk.tool, params: chunk.params, state: chunk.allowed ? 'running' : 'denied' });
+      const targetEl = assistantEl ? assistantEl.wrapper : null;
+      const card = addToolCard(targetEl, { tool: chunk.tool, params: chunk.params, state: chunk.allowed ? 'running' : 'denied' }, target);
       card.dataset.callId = chunk.callId;
-      state.toolCards.push(card);
+      target.toolCards.push(card);
       if (chunk.allowed) setStatus('amber', i18nT('statusExec', { tool: humanTool(chunk.tool) }));
     } else if (chunk.type === 'tool_result') {
-      const card = state.toolCards.find((c) => c.dataset.callId === chunk.callId);
+      const card = target.toolCards.find((c) => c.dataset.callId === chunk.callId);
       const stateIm = {
         tool: chunk.tool,
         state: chunk.result.includes('"approved": false') ? 'denied' : 'done',
         resultText: chunk.result
       };
-      setToolState(card, stateIm);
+      setToolState(card, stateIm, target);
       if (!chunk.result.includes('"approved": false')) setStatus('green', i18nT('statusToolDone'));
     } else if (chunk.type === 'done') {
-      if (assistantEl) finalizeAssistant(assistantEl, currentText);
+      if (assistantEl) finalizeAssistant(assistantEl, currentText, target);
       else {
-        assistantEl = addAssistantMsgStreamingLabel(0);
-        finalizeAssistant(assistantEl, chunk.text);
+        assistantEl = addAssistantMsgStreamingLabel(0, target);
+        finalizeAssistant(assistantEl, chunk.text, target);
       }
-      state.messages.push({ role: 'assistant', content: chunk.text });
-      finalize();
+      target.messages.push({ role: 'assistant', content: chunk.text });
+      finalize(target, unsub);
       if (state.settings && state.settings.showTokens !== false && chunk.usage) {
         const u = chunk.usage;
         setStatus('green', i18nT('statusDoneTokens', { n: ((u.prompt_tokens || 0) + (u.completion_tokens || 0)) }));
@@ -809,23 +950,24 @@ async function send() {
       if (assistantEl) {
         assistantEl.md.innerHTML = '<p style="color: var(--danger)">⚠️ ' + escapeHtml(chunk.message) + '</p>';
       } else {
-        const a = addAssistantMsgStreamingLabel(0);
+        const a = addAssistantMsgStreamingLabel(0, target);
         a.md.innerHTML = '<p style="color: var(--danger)">⚠️ ' + escapeHtml(chunk.message) + '</p>';
       }
-      state.messages.push({ role: 'assistant', content: chunk.text || (i18nT('msgErrorBadge') + chunk.message) });
-      finalize();
+      target.messages.push({ role: 'assistant', content: chunk.text || (i18nT('msgErrorBadge') + chunk.message) });
+      finalize(target, unsub);
       setStatus('red', i18nT('statusError'));
     } else if (chunk.type === 'aborted') {
       if (assistantEl && currentText) {
         assistantEl.md.innerHTML = renderMarkdown(currentText) + '<p style="color: var(--text-dim); font-size: 12px">· ' + i18nT('stopped') + '</p>';
-        state.messages.push({ role: 'assistant', content: currentText });
+        target.messages.push({ role: 'assistant', content: currentText });
       }
-      finalize();
+      finalize(target, unsub);
       setStatus('green', i18nT('stopped'));
     }
   });
+  target.unsubscribe = unsub;
 
-  const history = state.messages.slice(0, -1).map((m) => ({ ...m }));
+  const history = target.messages.slice(0, -1).map((m) => ({ ...m }));
   // бюджет контекста: отбрасываем самые старые сообщения, если история слишком длинная
   const budget = (state.settings && state.settings.maxContextChars) || 120000;
   if (budget > 0 && history.length) {
@@ -851,23 +993,24 @@ async function send() {
   let result = null;
   try {
     result = await api.startAgent({
+      sessionId: target.streamKey,
       workspaceId: state.activeWorkspace ? state.activeWorkspace.id : null,
       model,
       messages
     });
   } catch (err) {
     // шлюз мог упасть без событий — снимаем блокировку и сообщаем об ошибке
-    if (state.streaming) {
-      state.messages.push({ role: 'assistant', content: i18nT('errorLaunch') + err.message });
-      finalize();
+    if (target.streaming) {
+      target.messages.push({ role: 'assistant', content: i18nT('errorLaunch') + err.message });
+      finalize(target, unsub);
       setStatus('red', i18nT('statusError'));
     }
     return;
   }
 
-  if (!state.streaming) return;
-  if (result && result.aborted && !currentText && !state.messages.some((m) => m.role === 'user' && m.content === userContent)) {
-    finalize();
+  if (!target.streaming) return;
+  if (result && result.aborted && !currentText && !target.messages.some((m) => m.role === 'user' && m.content === userContent)) {
+    finalize(target, unsub);
     setStatus('green', i18nT('stopped'));
   }
 }
@@ -877,8 +1020,9 @@ function clearPendingFiles() {
   renderPendingFiles();
 }
 
-function pullToolCardsTo(wrapper) {
-  for (const card of state.toolCards) {
+function pullToolCardsTo(wrapper, sess) {
+  const cards = sess ? sess.toolCards : [];
+  for (const card of cards) {
     if (card.parentElement && card.parentElement !== wrapper) {
       card.remove();
       wrapper.appendChild(card);
@@ -886,29 +1030,35 @@ function pullToolCardsTo(wrapper) {
   }
 }
 
-function finalizeAssistant(el, text) {
+function finalizeAssistant(el, text, sess) {
   if (!el) return;
   mdLastFlush.delete(el.md);
-  renderAssistant(el, text || '', { live: false });
+  renderAssistant(el, text || '', { live: false }, sess);
   mdLastFlush.delete(el.md);
 }
 
-function finalize() {
-  setStreaming(false);
-  if (unsubscribe) { unsubscribe(); unsubscribe = null; }
-  state.toolCards = [];
-  saveChat();
+function finalize(sess, unsub) {
+  setStreaming(false, sess);
+  if (unsub) { unsub(); sess.unsubscribe = null; }
+  sess.toolCards = [];
+  saveChat(sess);
 }
 
-function setStreaming(on) {
-  state.streaming = on;
-  elSend.disabled = on || (elInput.value.trim().length === 0 && !state.pendingFiles.length);
-  elSend.classList.toggle('hidden', on);
-  elStop.classList.toggle('hidden', !on);
+function setStreaming(on, sess) {
+  const target = sess || currentSession();
+  if (target) target.streaming = on;
+  const active = currentSession();
+  const isActive = !target || (active && active.id === target.id);
+  if (isActive) {
+    elSend.disabled = on || (elInput.value.trim().length === 0 && !state.pendingFiles.length);
+    elSend.classList.toggle('hidden', on);
+    elStop.classList.toggle('hidden', !on);
+  }
 }
 
 function stop() {
-  api.stopAgent();
+  const sess = currentSession();
+  api.stopAgent(sess ? sess.streamKey : null);
 }
 
 /* ---------- models ---------- */
@@ -1149,7 +1299,7 @@ async function setupApproval() {
     $('approval').classList.remove('hidden');
     approvalResolve = (res) => {
       $('approval').classList.add('hidden');
-      api.replyApproval(res);
+      api.replyApproval(Object.assign({ sessionId: payload.sessionId }, res));
     };
   });
 
@@ -1168,13 +1318,22 @@ async function setupApproval() {
 function showPollCard(payload) {
   const poll = payload.poll || {};
   const callId = payload.callId;
+  const sessionId = payload.sessionId;
   const title = poll.title || '';
   const question = poll.question || i18nT('pollQuestion');
   const options = Array.isArray(poll.options) ? poll.options : [];
   const multiple = !!poll.multiple;
   const allowCustom = poll.allowCustom !== false;
 
-  const wrapper = state.lastAssistant || elMessages;
+  let sess = null;
+  if (sessionId) {
+    for (const key in state.sessions) {
+      const s = state.sessions[key];
+      if (s.streamKey === sessionId) { sess = s; break; }
+    }
+  }
+  sess = sess || currentSession();
+  const wrapper = (sess && sess.lastAssistant) || (sess ? sessionContainer(sess) : elMessages);
   const card = document.createElement('div');
   card.className = 'poll-card';
   card.dataset.callId = callId;
@@ -1246,8 +1405,8 @@ function showPollCard(payload) {
     if (custom) parts.push('✍️ ' + custom);
     answerBox.textContent = i18nT('pollReplied', { answer: (parts.join(' · ') || '—') });
     answerBox.classList.remove('hidden');
-    api.replyPoll({ callId, picks, custom });
-    scrollToBottom();
+    api.replyPoll({ sessionId, callId, picks, custom });
+    scrollToBottom(sess);
   };
 
   optsBox.querySelectorAll('input').forEach((i) => {
@@ -1268,18 +1427,18 @@ function showPollCard(payload) {
   }
   sendBtn.addEventListener('click', () => submit(false));
   card.querySelector('.poll-skip').addEventListener('click', () => {
-    api.replyPoll({ callId, picks: [], custom: '' });
+    api.replyPoll({ sessionId, callId, picks: [], custom: '' });
     card.classList.add('answered');
     optsBox.querySelectorAll('input').forEach((i) => (i.disabled = true));
     if (customInput) customInput.disabled = true;
     answerBox.textContent = i18nT('pollSkipped');
     answerBox.classList.remove('hidden');
-    scrollToBottom();
+    scrollToBottom(sess);
   });
   refreshSend();
 
   wrapper.appendChild(card);
-  scrollToBottom();
+  scrollToBottom(sess);
 }
 
 function setupPoll() {

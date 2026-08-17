@@ -50,7 +50,7 @@ contextBridge.exposeInMainWorld('infinity', {
 
   // agent
   startAgent: (payload) => ipcRenderer.invoke('agent:start', payload),
-  stopAgent: () => ipcRenderer.invoke('agent:stop'),
+  stopAgent: (sessionId) => ipcRenderer.invoke('agent:stop', sessionId),
   clearRules: () => ipcRenderer.invoke('agent:clearRules'),
 
   onAgentChunk: (cb) => on('agent:chunk', cb),

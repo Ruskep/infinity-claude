@@ -502,11 +502,16 @@ body.theme-anim *::before, body.theme-anim *::after {
   scroll-behavior: smooth;
 }
 
+/* контейнер активной сессии внутри #messages — ведёт себя как колонка сообщений */
+.msg-session { width: 100%; }
+
 /* карточки инструментов/опросов, попадающие прямо в #messages до появления
    сообщения ассистента, не растягиваются на весь экран, а придерживаются
    той же колонки, что и обычные сообщения (.msg) */
 #messages > .tool-card,
-#messages > .poll-card {
+#messages > .poll-card,
+.msg-session > .tool-card,
+.msg-session > .poll-card {
   width: calc(100% - 56px);
   max-width: var(--msg-max-width);
   margin-left: auto;

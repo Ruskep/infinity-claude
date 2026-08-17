@@ -170,7 +170,8 @@ async function toolSet(cfg) {
 }
 
 let mainWindow = null;
-let activeController = null;
+// активные стримы по сессиям: сессия из рендерера (id чата) -> AbortController
+const controllers = new Map();   // sessionId -> AbortController
 let activeWorkspaceId = null;
 
 /* ---------- updates ---------- */
@@ -387,7 +388,7 @@ ipcMain.handle('fsx:readAttached', async (_e, { filePath }) => {
 
 /* ---------- agent ---------- */
 
-async function requestApproval(sender, { workspaceId, tool, params }) {
+async function requestApproval(sender, sessionId, { workspaceId, tool, params }) {
   const ws = workspaces.get(workspaceId);
   const wsPath = ws ? ws.path : null;
   const argPath = params.path || '';
@@ -416,7 +417,7 @@ async function requestApproval(sender, { workspaceId, tool, params }) {
       ? { title: 'Выполнить команду', code: params.command }
       : { title: `${humanize[tool] || tool}: ${params.path}`, code: tool === 'edit_file' ? params.old_string : (params.content || '') };
 
-  const answer = await dispatchApproval(sender, {
+  const answer = await dispatchApproval(sender, sessionId, {
     tool, argPath, humanized: { label: humanize[tool] || tool, ...description }
   });
 
@@ -426,32 +427,34 @@ async function requestApproval(sender, { workspaceId, tool, params }) {
   return { allow: !!answer.allow };
 }
 
-function dispatchApproval(sender, payload) {
+function dispatchApproval(sender, sessionId, payload) {
   return new Promise((resolve) => {
-    const channel = 'agent:approval';
     const once = (_e, res) => {
+      if (res && res.sessionId && res.sessionId !== sessionId) return; // ответ от другой сессии
       ipcMain.removeListener('agent:approval:reply', once);
       resolve(res);
     };
     ipcMain.on('agent:approval:reply', once);
-    if (!sender.isDestroyed()) sender.send(channel, payload);
+    if (!sender.isDestroyed()) sender.send('agent:approval', Object.assign({ sessionId }, payload));
   });
 }
 
-let pendingPoll = null;
+const pendingPolls = new Map(); // sessionId -> resolve
 
 ipcMain.on('agent:poll:reply', (_e, res) => {
-  if (pendingPoll) { pendingPoll(res); pendingPoll = null; }
+  const key = (res && res.sessionId) || null;
+  const resolve = key !== null && pendingPolls.has(key) ? pendingPolls.get(key) : null;
+  if (resolve) { pendingPolls.delete(key); resolve(res); }
 });
 
-function dispatchPoll(sender, payload) {
+function dispatchPoll(sender, sessionId, payload) {
   return new Promise((resolve) => {
-    pendingPoll = resolve;
-    if (!sender.isDestroyed()) sender.send('agent:poll', payload);
+    pendingPolls.set(sessionId, resolve);
+    if (!sender.isDestroyed()) sender.send('agent:poll', Object.assign({ sessionId }, payload));
   });
 }
 
-async function runAgent(sender, { workspaceId, model, messages }) {
+async function runAgent(sender, { sessionId, workspaceId, model, messages }) {
   const ws = workspaces.get(workspaceId);
   const cfg = settings.get();
   const baseUrl = cfg.baseUrl;
@@ -460,11 +463,11 @@ async function runAgent(sender, { workspaceId, model, messages }) {
   const workingDir = (ws && ws.path) || app.getPath('documents'); // без проекта работаем в Документах
 
   const push = (chunk) => {
-    if (!sender.isDestroyed()) sender.send('agent:chunk', chunk);
+    if (!sender.isDestroyed()) sender.send('agent:chunk', Object.assign({ sessionId }, chunk));
   };
 
   const controller = new AbortController();
-  activeController = controller;
+  controllers.set(sessionId, controller);
 
   const ctx = { messages: messages.slice(), workingDir: workingDir };
   let emptyRetries = 0;
@@ -592,7 +595,7 @@ async function runAgent(sender, { workspaceId, model, messages }) {
           // карточка-опрос: показываем рендереру и ждём ответ пользователя
           push({ type: 'tool_start', tool: 'ask_user', params, callId: call.id, allowed: true });
           push({ type: 'poll', callId: call.id, poll: params });
-          const answer = await dispatchPoll(sender, { callId: call.id, poll: params });
+          const answer = await dispatchPoll(sender, sessionId, { callId: call.id, poll: params });
           let result;
           if (answer && answer.aborted) {
             result = JSON.stringify({ approved: false, error: 'Пользователь прервал опрос' });
@@ -604,7 +607,7 @@ async function runAgent(sender, { workspaceId, model, messages }) {
           continue;
         }
 
-        const approval = await requestApproval(sender, { workspaceId, tool: call.name, params });
+        const approval = await requestApproval(sender, sessionId, { workspaceId, tool: call.name, params });
         push({ type: 'tool_start', tool: call.name, params, callId: call.id, allowed: approval.allow });
 
         let result;
@@ -634,7 +637,8 @@ async function runAgent(sender, { workspaceId, model, messages }) {
     push({ type: 'error', message: err.message });
     return { ok: false, message: err.message };
   } finally {
-    if (activeController === controller) activeController = null;
+    if (controllers.get(sessionId) === controller) controllers.delete(sessionId);
+    if (pendingPolls.has(sessionId)) pendingPolls.delete(sessionId);
   }
 }
 
@@ -671,9 +675,16 @@ ipcMain.handle('agent:start', async (event, payload) => {
   return await runAgent(event.sender, payload);
 });
 
-ipcMain.handle('agent:stop', () => {
-  if (activeController) activeController.abort();
-  if (pendingPoll) { pendingPoll({ aborted: true }); pendingPoll = null; }
+ipcMain.handle('agent:stop', (_e, sessionId) => {
+  if (sessionId) {
+    const c = controllers.get(sessionId);
+    if (c) c.abort();
+    if (pendingPolls.has(sessionId)) { pendingPolls.get(sessionId)({ aborted: true }); pendingPolls.delete(sessionId); }
+  } else {
+    for (const c of controllers.values()) c.abort();
+    for (const resolve of pendingPolls.values()) resolve({ aborted: true });
+    pendingPolls.clear();
+  }
   return true;
 });
 
